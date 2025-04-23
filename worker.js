@@ -34,9 +34,9 @@ async function handleRequest(request, env) {
     if (text && text.startsWith('/')) {
       const command = text.split(' ')[0];
       if (command === '/start') {
-        await sendMessage(chatId, '🤖 机器人已启用！\n\n直接发送文件即可自动上传，支持图片、视频、音频、文档等多种格式。', env);
+        await sendMessage(chatId, '🤖 机器人已启用！\n\n直接发送文件即可自动上传，支持图片、视频、音频、文档等多种格式。支持最大5GB的文件上传。', env);
       } else if (command === '/help') {
-        await sendMessage(chatId, '📖 使用说明：\n\n1. 发送 /start 启动机器人（仅首次需要）。\n2. 直接发送图片、视频、音频、文档或其他文件，机器人会自动处理上传。\n3. 无需输入其他命令，无需切换模式。\n4. 此机器人由 @uki0x 开发，支持多种文件类型上传', env);
+        await sendMessage(chatId, '📖 使用说明：\n\n1. 发送 /start 启动机器人（仅首次需要）。\n2. 直接发送图片、视频、音频、文档或其他文件，机器人会自动处理上传。\n3. 支持最大5GB的文件上传（受Cloudflare Worker限制，超大文件可能会失败）。\n4. 无需输入其他命令，无需切换模式。\n5. 此机器人由 @uki0x 开发，支持多种文件类型上传', env);
       }
       return new Response('OK', { status: 200 });
     }
@@ -166,7 +166,7 @@ async function handleVideo(message, chatId, isDocument = false, env) {
       const videoBuffer = await videoResponse.arrayBuffer();
       const videoSize = videoBuffer.byteLength / (1024 * 1024); // MB
 
-      if (videoSize > 200) { // 注意：检查 Cloudflare Worker 的内存和CPU限制
+      if (videoSize > 5120) { // 增加到5GB (5120MB)
         await sendMessage(chatId, `⚠️ 视频太大 (${videoSize.toFixed(2)}MB)，可能无法在Worker环境中处理或上传。尝试上传中...`, env);
       }
 
@@ -243,6 +243,10 @@ async function handleAudio(message, chatId, isDocument = false, env) {
 
       const audioBuffer = await audioResponse.arrayBuffer();
       const audioSize = audioBuffer.byteLength / (1024 * 1024); // MB
+      
+      if (audioSize > 5120) { // 增加到5GB (5120MB)
+        await sendMessage(chatId, `⚠️ 音频太大 (${audioSize.toFixed(2)}MB)，可能无法在Worker环境中处理或上传。尝试上传中...`, env);
+      }
 
       const formData = new FormData();
       const mimeType = isDocument 
@@ -319,6 +323,10 @@ async function handleAnimation(message, chatId, isDocument = false, env) {
 
       const animBuffer = await animResponse.arrayBuffer();
       const animSize = animBuffer.byteLength / (1024 * 1024); // MB
+      
+      if (animSize > 5120) { // 增加到5GB (5120MB)
+        await sendMessage(chatId, `⚠️ 动画太大 (${animSize.toFixed(2)}MB)，可能无法在Worker环境中处理或上传。尝试上传中...`, env);
+      }
 
       const formData = new FormData();
       const mimeType = isDocument 
@@ -397,7 +405,7 @@ async function handleDocument(message, chatId, env) {
       const fileBuffer = await fileResponse.arrayBuffer();
       const fileSize = fileBuffer.byteLength / (1024 * 1024); // MB
 
-      if (fileSize > 200) { // 检查 Cloudflare Worker 的限制
+      if (fileSize > 5120) { // 增加到5GB (5120MB)
         await sendMessage(chatId, `⚠️ 文件太大 (${fileSize.toFixed(2)}MB)，可能无法在Worker环境中处理或上传。尝试上传中...`, env);
       }
 
