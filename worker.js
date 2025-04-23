@@ -428,10 +428,10 @@ async function handleDocument(message, chatId, env) {
         uploadResult = responseText;
       }
 
-      let fileUrl = extractUrlFromResult(uploadResult, IMG_BED_URL);
+      let fileUrl2 = extractUrlFromResult(uploadResult, IMG_BED_URL);
 
-      if (fileUrl) {
-        const plainLink = fileUrl;
+      if (fileUrl2) {
+        const plainLink = fileUrl2;
         const msgText = `✅ 文件上传成功！\n\n` +
                        `📄 文件名: ${fileName}\n` +
                        `📦 文件大小: ${formatFileSize(fileBuffer.byteLength)}\n` +
