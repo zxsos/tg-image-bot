@@ -410,7 +410,17 @@ async function handleDocument(message, chatId, env) {
       }
 
       const formData = new FormData();
-      formData.append('file', new File([fileBuffer], fileName, { type: mimeType }));
+      
+      // 修复exe文件上传问题：确保文件名保持原样，不要修改扩展名
+      let safeFileName = fileName;
+      
+      // 如果是可执行文件，确保MIME类型正确
+      let safeMimeType = mimeType;
+      if (fileName.toLowerCase().endsWith('.exe')) {
+        safeMimeType = 'application/octet-stream';
+      }
+      
+      formData.append('file', new File([fileBuffer], safeFileName, { type: safeMimeType }));
 
       const uploadUrl = new URL(IMG_BED_URL);
       uploadUrl.searchParams.append('returnFormat', 'full');
@@ -470,6 +480,15 @@ function extractUrlFromResult(result, imgBedUrl) {
       console.error("无法解析 IMG_BED_URL:", imgBedUrl, e);
   }
 
+  // 处理可能的错误响应
+  if (typeof result === 'string' && result.includes("The string did not match the expected pattern")) {
+    console.error("遇到模式匹配错误，可能是文件扩展名问题");
+    // 尝试从错误响应中提取可能的URL
+    const urlMatch = result.match(/(https?:\/\/[^\s"]+)/);
+    if (urlMatch) {
+      return urlMatch[0];
+    }
+  }
 
   if (Array.isArray(result) && result.length > 0) {
     const item = result[0];
@@ -532,6 +551,7 @@ function getFileIcon(filename, mimeType) {
     if (mimeType.includes('text/')) return '📝';
     if (mimeType.includes('zip') || mimeType.includes('compressed')) return '🗜️';
     if (mimeType.includes('html')) return '🌐';
+    if (mimeType.includes('application/x-msdownload') || mimeType.includes('application/octet-stream')) return '⚙️';
   }
   
   if (filename) {
