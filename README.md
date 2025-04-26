@@ -1,4 +1,4 @@
-# Telegram 图床上传机器人 (基于 Cloudflare Workers)
+# Tg-bot
 
 这是一个部署在 Cloudflare Workers 上的 Telegram 机器人。它可以接收您发送到 Telegram 的图片和视频文件，并将它们自动上传到您指定的图床或对象存储服务（需要有公开的上传接口），然后将生成的公开链接返回给您。
 
@@ -63,7 +63,6 @@
         *   *网页方法*: 登录 Cloudflare -> Workers & Pages -> 您的 Worker -> Settings -> Variables -> Add variable -> 输入 `IMG_BED_URL` -> 粘贴图床上传 URL -> Save。
 
 
-
 7.  **设置 Telegram Webhook**:
     *   需要告诉 Telegram 将机器人的更新发送到您刚刚部署的 Worker URL。
     *   打开浏览器，或者使用 `curl` 工具，访问以下链接（**请务必替换 `<YOUR_BOT_TOKEN>` 和 `<YOUR_WORKER_URL>`**）：
@@ -97,5 +96,3 @@
     help - 查看帮助信息
     ```
 5.  设置成功后，用户在与您的机器人对话时，点击 `/` 按钮就能看到这些预设的命令选项了。
-
-![Bot Commands Menu](https://img.vki.im/file/1744802371432_image.jpg)
