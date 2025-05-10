@@ -1,9 +1,5 @@
 # Tg-bot
 
-这是一个部署在 Cloudflare Workers 上的 Telegram 机器人。它可以接收您发送到 Telegram 的图片和视频文件，并将它们自动上传到您指定的图床或对象存储服务（需要有公开的上传接口），然后将生成的公开链接返回给您。
-
-本项目利用 Cloudflare Workers 的 Serverless 特性，可以实现低成本甚至免费（在 Cloudflare 免费额度内）运行。
-
 ## ✨ 功能特性
 
 *   **自动上传**: 直接向机器人发送图片或视频即可触发上传。
