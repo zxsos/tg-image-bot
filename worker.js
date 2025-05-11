@@ -33,22 +33,39 @@ async function handleRequest(request, env) {
     const chatId = message.chat.id;
     const text = message.text?.trim();
 
-
-    
     // 处理命令
     if (text && text.startsWith('/')) {
       const command = text.split(' ')[0];
       if (command === '/start') {
         await sendMessage(chatId, '🤖 机器人已启用！\n\n直接发送文件即可自动上传，支持图片、视频、音频、文档等多种格式。支持最大5GB的文件上传。', env);
       } else if (command === '/help') {
-        await sendMessage(chatId, '📖 使用说明：\n\n1. 发送 /start 启动机器人（仅首次需要）。\n2. 直接发送图片、视频、音频、文档或其他文件，机器人会自动处理上传。\n3. 支持最大5GB的文件上传（受Cloudflare Worker限制，超大文件可能会失败）。\n4. 使用 /webdav 命令切换上传目标到WebDAV服务器。\n5. 此机器人由 @szxin 开发，支持多种文件类型上传', env);
+        await sendMessage(chatId, '📖 使用说明：\n\n1. 发送 /start 启动机器人（仅首次需要）。\n2. 直接发送图片、视频、音频、文档或其他文件，机器人会自动处理上传。\n3. 支持最大5GB的文件上传（受Cloudflare Worker限制，超大文件可能会失败）。\n4. 使用 /webdav 命令切换上传目标到WebDAV服务器。\n5. 使用 /webdav_folder 命令切换WebDAV上传文件夹。\n6. 此机器人由 @szxin 开发，支持多种文件类型上传', env);
       } else if (command === '/webdav') {
         if (!WEBDAV_URL || !WEBDAV_USERNAME || !WEBDAV_PASSWORD) {
           await sendMessage(chatId, '❌ WebDAV未配置，请联系管理员配置WebDAV信息。', env);
         } else {
           // 切换上传目标到WebDAV
-          env.USE_WEBDAV = true;
-          await sendMessage(chatId, '✅ 已切换到WebDAV上传模式！\n\n所有文件将上传到WebDAV服务器。', env);
+          env.USE_WEBDAV = !env.USE_WEBDAV;
+          const status = env.USE_WEBDAV ? '已切换到WebDAV上传模式' : '已切换回图床上传模式';
+          const currentFolder = env.WEBDAV_CURRENT_FOLDER || '根目录';
+          await sendMessage(chatId, `✅ ${status}！\n\n当前WebDAV上传文件夹: ${currentFolder}\n\n使用 /webdav_folder 命令可以切换上传文件夹。`, env);
+        }
+      } else if (command === '/webdav_folder') {
+        if (!env.USE_WEBDAV) {
+          await sendMessage(chatId, '❌ 请先使用 /webdav 命令切换到WebDAV模式。', env);
+          return new Response('OK', { status: 200 });
+        }
+
+        const args = text.split(' ').slice(1);
+        if (args.length === 0) {
+          // 显示当前文件夹
+          const currentFolder = env.WEBDAV_CURRENT_FOLDER || '根目录';
+          await sendMessage(chatId, `📁 当前WebDAV上传文件夹: ${currentFolder}\n\n使用方法：\n/webdav_folder 文件夹路径\n\n例如：\n/webdav_folder images\n/webdav_folder photos/2024`, env);
+        } else {
+          // 设置新文件夹
+          const newFolder = args[0].replace(/^\/+|\/+$/g, ''); // 移除开头和结尾的斜杠
+          env.WEBDAV_CURRENT_FOLDER = newFolder;
+          await sendMessage(chatId, `✅ WebDAV上传文件夹已更改为: ${newFolder || '根目录'}`, env);
         }
       }
       return new Response('OK', { status: 200 });
@@ -718,17 +735,29 @@ function formatFileSize(bytes, decimals = 2) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
 
-// 添加WebDAV上传函数
+// 修改WebDAV上传函数以支持文件夹
 async function uploadToWebDAV(fileBuffer, fileName, env) {
   const WEBDAV_URL = env.WEBDAV_URL;
   const WEBDAV_USERNAME = env.WEBDAV_USERNAME;
   const WEBDAV_PASSWORD = env.WEBDAV_PASSWORD;
+  const currentFolder = env.WEBDAV_CURRENT_FOLDER || '';
 
   // 构建WebDAV请求URL
   const uploadUrl = new URL(WEBDAV_URL);
   if (!uploadUrl.pathname.endsWith('/')) {
     uploadUrl.pathname += '/';
   }
+  
+  // 添加当前文件夹路径
+  if (currentFolder) {
+    uploadUrl.pathname += currentFolder + '/';
+  }
+  
+  // 确保文件夹存在
+  if (currentFolder) {
+    await createWebDAVFolder(uploadUrl.toString(), env);
+  }
+  
   uploadUrl.pathname += fileName;
 
   // 创建Basic认证头
@@ -752,53 +781,22 @@ async function uploadToWebDAV(fileBuffer, fileName, env) {
   return uploadUrl.toString();
 }
 
-// 修改文件处理函数以支持WebDAV
-async function handleFileUpload(fileBuffer, fileName, mimeType, chatId, env) {
-  try {
-    let fileUrl;
-    
-    if (env.USE_WEBDAV) {
-      // 使用WebDAV上传
-      fileUrl = await uploadToWebDAV(fileBuffer, fileName, env);
-    } else {
-      // 使用原有的图床上传
-      const formData = new FormData();
-      formData.append('file', new File([fileBuffer], fileName, { type: mimeType }));
+// 添加创建WebDAV文件夹的函数
+async function createWebDAVFolder(folderUrl, env) {
+  const WEBDAV_USERNAME = env.WEBDAV_USERNAME;
+  const WEBDAV_PASSWORD = env.WEBDAV_PASSWORD;
+  const auth = btoa(`${WEBDAV_USERNAME}:${WEBDAV_PASSWORD}`);
 
-      const uploadUrl = new URL(env.IMG_BED_URL);
-      uploadUrl.searchParams.append('returnFormat', 'full');
-
-      if (env.AUTH_CODE) {
-        uploadUrl.searchParams.append('authCode', env.AUTH_CODE);
-      }
-
-      const uploadResponse = await fetch(uploadUrl, {
-        method: 'POST',
-        body: formData
-      });
-
-      const responseText = await uploadResponse.text();
-      let uploadResult;
-      try {
-        uploadResult = JSON.parse(responseText);
-      } catch (e) {
-        uploadResult = responseText;
-      }
-
-      fileUrl = extractUrlFromResult(uploadResult, env.IMG_BED_URL);
+  // 发送MKCOL请求创建文件夹
+  const response = await fetch(folderUrl, {
+    method: 'MKCOL',
+    headers: {
+      'Authorization': `Basic ${auth}`
     }
+  });
 
-    if (fileUrl) {
-      const msgText = `✅ 文件上传成功！\n\n` +
-                     `📄 文件名: ${fileName}\n` +
-                     `📦 文件大小: ${formatFileSize(fileBuffer.byteLength)}\n` +
-                     `🔗 下载链接:\n${fileUrl}\n\n`;
-      await sendMessage(chatId, msgText, env);
-    } else {
-      throw new Error('无法获取文件链接');
-    }
-  } catch (error) {
-    console.error('处理文件时出错:', error);
-    await sendMessage(chatId, `❌ 处理文件时出错: ${error.message}\n\n可能是文件太大或格式不支持。`, env);
+  // 如果文件夹已存在（409）或其他错误，忽略它
+  if (!response.ok && response.status !== 409) {
+    console.error(`创建WebDAV文件夹失败: ${response.status} ${response.statusText}`);
   }
 }
