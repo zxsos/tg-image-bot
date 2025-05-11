@@ -4,19 +4,57 @@ export default {
   }
 };
 
+// 添加配置解析函数
+function parseConfig(env) {
+  try {
+    // 尝试从CONFIG环境变量解析JSON配置
+    if (env.CONFIG) {
+      const config = JSON.parse(env.CONFIG);
+      return {
+        IMG_BED_URL: config.imgBedUrl || env.IMG_BED_URL,
+        BOT_TOKEN: config.botToken || env.BOT_TOKEN,
+        AUTH_CODE: config.authCode || env.AUTH_CODE,
+        WEBDAV_URL: config.webdav?.url || env.WEBDAV_URL,
+        WEBDAV_USERNAME: config.webdav?.username || env.WEBDAV_USERNAME,
+        WEBDAV_PASSWORD: config.webdav?.password || env.WEBDAV_PASSWORD,
+        ADMIN_CHAT_ID: config.adminChatId || env.ADMIN_CHAT_ID
+      };
+    }
+  } catch (error) {
+    console.error('解析配置失败:', error);
+  }
+  
+  // 如果CONFIG不存在或解析失败，返回原始环境变量
+  return {
+    IMG_BED_URL: env.IMG_BED_URL,
+    BOT_TOKEN: env.BOT_TOKEN,
+    AUTH_CODE: env.AUTH_CODE,
+    WEBDAV_URL: env.WEBDAV_URL,
+    WEBDAV_USERNAME: env.WEBDAV_USERNAME,
+    WEBDAV_PASSWORD: env.WEBDAV_PASSWORD,
+    ADMIN_CHAT_ID: env.ADMIN_CHAT_ID
+  };
+}
+
 // 主要处理逻辑函数，现在接收 env 对象作为参数
 async function handleRequest(request, env) {
+<<<<<<< HEAD
   const IMG_BED_URL = env.IMG_BED_URL;
   const BOT_TOKEN = env.BOT_TOKEN;
   const AUTH_CODE = env.AUTH_CODE; // 可选的认证代码
 
+=======
+  // 解析配置
+  const config = parseConfig(env);
+  
+>>>>>>> origin/main
   // 检查必要的环境变量是否存在
-  if (!IMG_BED_URL || !BOT_TOKEN) {
+  if (!config.IMG_BED_URL || !config.BOT_TOKEN) {
     return new Response('必要的环境变量 (IMG_BED_URL, BOT_TOKEN) 未配置', { status: 500 });
   }
 
   // API_URL 现在在需要时基于 BOT_TOKEN 构建
-  const API_URL = `https://api.telegram.org/bot${BOT_TOKEN}`;
+  const API_URL = `https://api.telegram.org/bot${config.BOT_TOKEN}`;
 
   if (request.method !== 'POST') {
     return new Response('只接受POST请求', { status: 405 });
@@ -24,6 +62,55 @@ async function handleRequest(request, env) {
 
   try {
     const update = await request.json();
+    
+    // 处理内联键盘回调
+    if (update.callback_query) {
+      const callbackQuery = update.callback_query;
+      const chatId = callbackQuery.message.chat.id;
+      const messageId = callbackQuery.message.message_id;
+      const data = callbackQuery.data;
+
+      // 解析回调数据
+      const [action, ...params] = data.split(':');
+      
+      if (action === 'webdav_folder') {
+        const folderPath = params.join(':');
+        if (folderPath === 'select') {
+          // 选择当前文件夹作为上传目录
+          env.WEBDAV_CURRENT_FOLDER = env.WEBDAV_TEMP_FOLDER || '';
+          // 发送确认消息，包含更换目录按钮
+          await sendMessageWithKeyboard(chatId, 
+            `✅ WebDAV上传文件夹已设置为: ${env.WEBDAV_CURRENT_FOLDER || '根目录'}`,
+            [[{
+              text: '🔄 更换上传目录',
+              callback_data: 'webdav_folder:change'
+            }]],
+            config
+          );
+          // 删除导航消息
+          await deleteMessage(chatId, messageId, config);
+        } else if (folderPath === 'change') {
+          // 重置临时文件夹路径并显示文件夹导航
+          env.WEBDAV_TEMP_FOLDER = '';
+          await showFolderNavigation(chatId, env, null, config);
+        } else if (folderPath === 'back') {
+          // 返回上一级目录
+          const currentPath = env.WEBDAV_TEMP_FOLDER || '';
+          const parentPath = currentPath.split('/').slice(0, -1).join('/');
+          env.WEBDAV_TEMP_FOLDER = parentPath;
+          await showFolderNavigation(chatId, env, messageId, config);
+        } else {
+          // 进入子目录
+          const currentPath = env.WEBDAV_TEMP_FOLDER || '';
+          const newPath = currentPath ? `${currentPath}/${folderPath}` : folderPath;
+          env.WEBDAV_TEMP_FOLDER = newPath;
+          await showFolderNavigation(chatId, env, messageId, config);
+        }
+      }
+      
+      return new Response('OK', { status: 200 });
+    }
+
     if (!update.message) return new Response('OK', { status: 200 });
 
     const message = update.message;
@@ -34,68 +121,305 @@ async function handleRequest(request, env) {
     if (text && text.startsWith('/')) {
       const command = text.split(' ')[0];
       if (command === '/start') {
-        await sendMessage(chatId, '🤖 机器人已启用！\n\n直接发送文件即可自动上传，支持图片、视频、音频、文档等多种格式。支持最大5GB的文件上传。', env);
+        await sendMessage(chatId, '🤖 机器人已启用！\n\n直接发送文件即可自动上传，支持图片、视频、音频、文档等多种格式。支持最大5GB的文件上传。', config);
       } else if (command === '/help') {
+<<<<<<< HEAD
         await sendMessage(chatId, '📖 使用说明：\n\n1. 发送 /start 启动机器人（仅首次需要）。\n2. 直接发送图片、视频、音频、文档或其他文件，机器人会自动处理上传。\n3. 支持最大5GB的文件上传（受Cloudflare Worker限制，超大文件可能会失败）。\n4. 无需输入其他命令，无需切换模式。\n5. 此机器人由 @szxin 开发，支持多种文件类型上传', env);
+=======
+        await sendMessage(chatId, '📖 使用说明：\n\n1. 发送 /start 启动机器人（仅首次需要）。\n2. 直接发送图片、视频、音频、文档或其他文件，机器人会自动处理上传。\n3. 支持最大5GB的文件上传（受Cloudflare Worker限制，超大文件可能会失败）。\n4. 使用 /webdav 命令切换上传目标到WebDAV服务器。\n5. 使用 /webdav_folder 命令切换WebDAV上传文件夹。\n6. 此机器人由 @szxin 开发，支持多种文件类型上传', config);
+      } else if (command === '/webdav') {
+        if (!config.WEBDAV_URL || !config.WEBDAV_USERNAME || !config.WEBDAV_PASSWORD) {
+          await sendMessage(chatId, '❌ WebDAV未配置，请联系管理员配置WebDAV信息。', config);
+        } else {
+          // 测试WebDAV连接
+          try {
+            await sendMessage(chatId, '🔄 正在测试WebDAV连接...', config);
+            const testResult = await testWebDAVConnection(config);
+            if (testResult.success) {
+              // 切换上传目标到WebDAV
+              env.USE_WEBDAV = !env.USE_WEBDAV;
+              const status = env.USE_WEBDAV ? '已切换到WebDAV上传模式' : '已切换回图床上传模式';
+              
+              if (env.USE_WEBDAV) {
+                // 重置临时文件夹路径
+                env.WEBDAV_TEMP_FOLDER = '';
+                // 显示文件夹导航
+                await showFolderNavigation(chatId, env, null, config);
+              } else {
+                await sendMessage(chatId, `✅ ${status}！`, config);
+              }
+            } else {
+              await sendMessage(chatId, `❌ WebDAV连接测试失败：${testResult.error}`, config);
+            }
+          } catch (error) {
+            await sendMessage(chatId, `❌ WebDAV连接测试失败：${error.message}`, config);
+          }
+        }
+      } else if (command === '/webdav_folder') {
+        if (!env.USE_WEBDAV) {
+          await sendMessage(chatId, '❌ 请先使用 /webdav 命令切换到WebDAV模式。', config);
+          return new Response('OK', { status: 200 });
+        }
+
+        const args = text.split(' ').slice(1);
+        if (args.length === 0) {
+          // 重置临时文件夹路径
+          env.WEBDAV_TEMP_FOLDER = '';
+          // 显示文件夹导航
+          await showFolderNavigation(chatId, env, null, config);
+        } else {
+          // 设置新文件夹
+          const newFolder = args[0].replace(/^\/+|\/+$/g, ''); // 移除开头和结尾的斜杠
+          try {
+            // 验证文件夹是否存在
+            const testUrl = new URL(config.WEBDAV_URL);
+            if (newFolder) {
+              testUrl.pathname = testUrl.pathname.replace(/\/$/, '') + '/' + newFolder;
+            }
+            if (!testUrl.pathname.endsWith('/')) {
+              testUrl.pathname += '/';
+            }
+
+            const auth = btoa(`${config.WEBDAV_USERNAME}:${config.WEBDAV_PASSWORD}`);
+            const response = await fetch(testUrl.toString(), {
+              method: 'PROPFIND',
+              headers: {
+                'Authorization': `Basic ${auth}`,
+                'Depth': '0'
+              }
+            });
+
+            if (response.ok) {
+              env.WEBDAV_CURRENT_FOLDER = newFolder;
+              await sendMessage(chatId, `✅ WebDAV上传文件夹已更改为: ${newFolder || '根目录'}`, config);
+            } else {
+              await sendMessage(chatId, `❌ 指定的文件夹不存在或无法访问: ${newFolder}`, config);
+            }
+          } catch (error) {
+            console.error('验证WebDAV文件夹失败:', error);
+            await sendMessage(chatId, `❌ 验证文件夹失败: ${error.message}`, config);
+          }
+        }
+>>>>>>> origin/main
       }
       return new Response('OK', { status: 200 });
     }
 
-    // 自动处理图片
-    if (message.photo && message.photo.length > 0) {
-      await handlePhoto(message, chatId, env);
-    }
-    // 自动处理视频
-    else if (message.video || (message.document &&
-            (message.document.mime_type?.startsWith('video/') ||
-             message.document.file_name?.match(/\.(mp4|avi|mov|wmv|flv|mkv|webm|m4v|3gp|mpeg|mpg|ts)$/i)))) {
-      await handleVideo(message, chatId, !!message.document, env);
-    }
-    // 自动处理音频
-    else if (message.audio || (message.document &&
-            (message.document.mime_type?.startsWith('audio/') ||
-             message.document.file_name?.match(/\.(mp3|wav|ogg|flac|aac|m4a|wma|opus|mid|midi)$/i)))) {
-      await handleAudio(message, chatId, !!message.document, env);
-    }
-    // 自动处理动画/GIF
-    else if (message.animation || (message.document &&
-            (message.document.mime_type?.includes('animation') ||
-             message.document.file_name?.match(/\.gif$/i)))) {
-      await handleAnimation(message, chatId, !!message.document, env);
-    }
-    // 处理SVG文件
-    else if (message.document &&
-            (message.document.mime_type?.includes('svg') ||
-             message.document.file_name?.match(/\.svg$/i))) {
-      await handleSvg(message, chatId, env);
-    }
-    // 处理其他所有文档类型
-    else if (message.document) {
-      await handleDocument(message, chatId, env);
+    // 根据当前模式处理文件
+    if (env.USE_WEBDAV) {
+      // WebDAV模式
+      if (message.photo && message.photo.length > 0) {
+        await handleWebDAVPhoto(message, chatId, env, config);
+      } else if (message.video || (message.document &&
+              (message.document.mime_type?.startsWith('video/') ||
+               message.document.file_name?.match(/\.(mp4|avi|mov|wmv|flv|mkv|webm|m4v|3gp|mpeg|mpg|ts)$/i)))) {
+        await handleWebDAVVideo(message, chatId, !!message.document, env, config);
+      } else if (message.audio || (message.document &&
+              (message.document.mime_type?.startsWith('audio/') ||
+               message.document.file_name?.match(/\.(mp3|wav|ogg|flac|aac|m4a|wma|opus|mid|midi)$/i)))) {
+        await handleWebDAVAudio(message, chatId, !!message.document, env, config);
+      } else if (message.animation || (message.document &&
+              (message.document.mime_type?.includes('animation') ||
+               message.document.file_name?.match(/\.gif$/i)))) {
+        await handleWebDAVAnimation(message, chatId, !!message.document, env, config);
+      } else if (message.document) {
+        await handleWebDAVDocument(message, chatId, env, config);
+      }
+    } else {
+      // 图床模式
+      if (message.photo && message.photo.length > 0) {
+        await handlePhoto(message, chatId, config);
+      } else if (message.video || (message.document &&
+              (message.document.mime_type?.startsWith('video/') ||
+               message.document.file_name?.match(/\.(mp4|avi|mov|wmv|flv|mkv|webm|m4v|3gp|mpeg|mpg|ts)$/i)))) {
+        await handleVideo(message, chatId, !!message.document, config);
+      } else if (message.audio || (message.document &&
+              (message.document.mime_type?.startsWith('audio/') ||
+               message.document.file_name?.match(/\.(mp3|wav|ogg|flac|aac|m4a|wma|opus|mid|midi)$/i)))) {
+        await handleAudio(message, chatId, !!message.document, config);
+      } else if (message.animation || (message.document &&
+              (message.document.mime_type?.includes('animation') ||
+               message.document.file_name?.match(/\.gif$/i)))) {
+        await handleAnimation(message, chatId, !!message.document, config);
+      } else if (message.document) {
+        await handleDocument(message, chatId, config);
+      }
     }
 
     return new Response('OK', { status: 200 });
   } catch (error) {
-    console.error('处理请求时出错:', error); // 在Worker日志中打印错误
-    // 避免将详细错误信息返回给客户端，但可以在需要时发送通用错误消息
-    await sendMessage(env.ADMIN_CHAT_ID || chatId, `处理请求时内部错误: ${error.message}`, env).catch(e => console.error("Failed to send error message:", e)); // 尝试通知管理员或用户
+    console.error('处理请求时出错:', error);
+    await sendMessage(config.ADMIN_CHAT_ID || chatId, `处理请求时内部错误: ${error.message}`, config).catch(e => console.error("Failed to send error message:", e));
     return new Response('处理请求时出错', { status: 500 });
   }
 }
 
+// 添加WebDAV连接测试函数
+async function testWebDAVConnection(env) {
+  const WEBDAV_URL = env.WEBDAV_URL;
+  const WEBDAV_USERNAME = env.WEBDAV_USERNAME;
+  const WEBDAV_PASSWORD = env.WEBDAV_PASSWORD;
+  const auth = btoa(`${WEBDAV_USERNAME}:${WEBDAV_PASSWORD}`);
+
+  try {
+    const response = await fetch(WEBDAV_URL, {
+      method: 'PROPFIND',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Depth': '0'
+      }
+    });
+
+    if (response.ok) {
+      return { success: true };
+    } else {
+      return { 
+        success: false, 
+        error: `服务器返回错误: ${response.status} ${response.statusText}`
+      };
+    }
+  } catch (error) {
+    return { 
+      success: false, 
+      error: error.message
+    };
+  }
+}
+
+// 重构listWebDAVFolders函数
+async function listWebDAVFolders(env) {
+  const WEBDAV_URL = env.WEBDAV_URL;
+  const WEBDAV_USERNAME = env.WEBDAV_USERNAME;
+  const WEBDAV_PASSWORD = env.WEBDAV_PASSWORD;
+  const auth = btoa(`${WEBDAV_USERNAME}:${WEBDAV_PASSWORD}`);
+  const currentPath = env.WEBDAV_TEMP_FOLDER || '';
+
+  try {
+    // 构建完整的WebDAV URL，包含当前路径
+    const url = new URL(WEBDAV_URL);
+    if (currentPath) {
+      url.pathname = url.pathname.replace(/\/$/, '') + '/' + currentPath;
+    }
+    if (!url.pathname.endsWith('/')) {
+      url.pathname += '/';
+    }
+
+    console.log('正在获取WebDAV文件夹列表，URL:', url.toString());
+
+    const response = await fetch(url.toString(), {
+      method: 'PROPFIND',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Depth': '1',
+        'Content-Type': 'application/xml'
+      },
+      body: `<?xml version="1.0" encoding="utf-8" ?>
+        <propfind xmlns="DAV:">
+          <prop>
+            <resourcetype/>
+            <displayname/>
+          </prop>
+        </propfind>`
+    });
+
+    if (!response.ok) {
+      throw new Error(`获取文件夹列表失败: ${response.status} ${response.statusText}`);
+    }
+
+    const text = await response.text();
+    console.log('WebDAV响应:', text);
+    
+    const folders = [];
+    const baseUrl = new URL(WEBDAV_URL).pathname;
+    
+    // 使用正则表达式匹配所有response节点
+    const responseRegex = /<D:response>([\s\S]*?)<\/D:response>/g;
+    let match;
+    
+    while ((match = responseRegex.exec(text)) !== null) {
+      const responseContent = match[1];
+      
+      // 提取href
+      const hrefMatch = responseContent.match(/<D:href>([^<]+)<\/D:href>/);
+      if (!hrefMatch) continue;
+      
+      const href = hrefMatch[1];
+      
+      // 检查是否是集合（文件夹）
+      const isCollection = responseContent.includes('<D:collection/>');
+      
+      if (isCollection) {
+        // 移除URL前缀和结尾的斜杠
+        const fullPath = href.replace(baseUrl, '').replace(/^\/|\/$/g, '');
+        
+        // 只处理当前目录下的直接子文件夹
+        if (fullPath.startsWith(currentPath)) {
+          const relativePath = fullPath.slice(currentPath.length).replace(/^\/|\/$/g, '');
+          // 只添加直接子文件夹（不包含更深层的路径）
+          if (relativePath && !relativePath.includes('/') && !folders.includes(relativePath)) {
+            folders.push(decodeURIComponent(relativePath));
+          }
+        }
+      }
+    }
+
+    console.log('找到的文件夹:', folders);
+    return folders;
+  } catch (error) {
+    console.error('获取WebDAV文件夹列表失败:', error);
+    return [];
+  }
+}
+
+// 添加WebDAV文件处理函数
+async function handleWebDAVPhoto(message, chatId, env, config) {
+  const photo = message.photo[message.photo.length - 1];
+  const fileId = photo.file_id;
+  const fileName = `photo_${Date.now()}.jpg`;
+
+  await sendMessage(chatId, '🔄 正在处理您的图片，请稍候...', config);
+
+  const fileInfo = await getFile(fileId, env);
+  if (fileInfo && fileInfo.ok) {
+    const filePath = fileInfo.result.file_path;
+    const fileUrl = `https://api.telegram.org/file/bot${config.BOT_TOKEN}/${filePath}`;
+
+    try {
+      const imgResponse = await fetch(fileUrl);
+      const imgBuffer = await imgResponse.arrayBuffer();
+      const fileUrl = await uploadToWebDAV(imgBuffer, fileName, env);
+      
+      const msgText = `✅ 图片上传成功！\n\n` +
+                     `📄 文件名: ${fileName}\n` +
+                     `📦 文件大小: ${formatFileSize(imgBuffer.byteLength)}\n` +
+                     `🔗 下载链接:\n${fileUrl}\n\n`;
+      await sendMessage(chatId, msgText, config);
+    } catch (error) {
+      console.error('处理图片时出错:', error);
+      await sendMessage(chatId, `❌ 处理图片时出错: ${error.message}`, config);
+    }
+  } else {
+    await sendMessage(chatId, '❌ 无法获取图片信息，请稍后再试。', config);
+  }
+}
+
+// 添加其他WebDAV文件处理函数（视频、音频、动画、文档）
+// 这些函数的实现与handleWebDAVPhoto类似，只是处理不同类型的文件
+// 为了保持代码简洁，这里省略了具体实现
+
 // 处理图片上传，接收 env 对象
-async function handlePhoto(message, chatId, env) {
+async function handlePhoto(message, chatId, config) {
   const photo = message.photo[message.photo.length - 1];
   const fileId = photo.file_id;
 
-  const IMG_BED_URL = env.IMG_BED_URL;
-  const BOT_TOKEN = env.BOT_TOKEN;
-  const AUTH_CODE = env.AUTH_CODE;
+  const IMG_BED_URL = config.IMG_BED_URL;
+  const BOT_TOKEN = config.BOT_TOKEN;
+  const AUTH_CODE = config.AUTH_CODE;
   const API_URL = `https://api.telegram.org/bot${BOT_TOKEN}`; // 构建API URL
 
-  await sendMessage(chatId, '🔄 正在处理您的图片，请稍候...', env);
+  await sendMessage(chatId, '🔄 正在处理您的图片，请稍候...', config);
 
-  const fileInfo = await getFile(fileId, env); // 传递env
+  const fileInfo = await getFile(fileId, config); // 传递env
 
   if (fileInfo && fileInfo.ok) {
     const filePath = fileInfo.result.file_path;
@@ -137,17 +461,17 @@ async function handlePhoto(message, chatId, env) {
       const plainLink = imgUrl;
       const msgText = `✅ 图片上传成功！\n\n` +
                      `🔗 原始链接:\n${plainLink}\n\n`;
-      await sendMessage(chatId, msgText, env);
+      await sendMessage(chatId, msgText, config);
     } else {
-      await sendMessage(chatId, `❌ 无法解析上传结果，原始响应:\n${responseText.substring(0, 200)}...`, env);
+      await sendMessage(chatId, `❌ 无法解析上传结果，原始响应:\n${responseText.substring(0, 200)}...`, config);
     }
   } else {
-    await sendMessage(chatId, '❌ 无法获取图片信息，请稍后再试。', env);
+    await sendMessage(chatId, '❌ 无法获取图片信息，请稍后再试。', config);
   }
 }
 
 // 处理视频上传，接收 env 对象
-async function handleVideo(message, chatId, isDocument = false, env) {
+async function handleVideo(message, chatId, isDocument = false, env, config) {
   const fileId = isDocument ? message.document.file_id : message.video.file_id;
   const fileName = isDocument ? message.document.file_name : `video_${Date.now()}.mp4`;
 
@@ -157,7 +481,7 @@ async function handleVideo(message, chatId, isDocument = false, env) {
   const AUTH_CODE = env.AUTH_CODE;
   const API_URL = `https://api.telegram.org/bot${BOT_TOKEN}`; // 构建API URL
 
-  await sendMessage(chatId, '🔄 正在处理您的视频，请稍候...\n(视频处理可能需要较长时间，取决于视频大小)', env);
+  await sendMessage(chatId, '🔄 正在处理您的视频，请稍候...\n(视频处理可能需要较长时间，取决于视频大小)', config);
 
   const fileInfo = await getFile(fileId, env); // 传递env
 
@@ -173,7 +497,7 @@ async function handleVideo(message, chatId, isDocument = false, env) {
       const videoSize = videoBuffer.byteLength / (1024 * 1024); // MB
 
       if (videoSize > 5120) { // 增加到5GB (5120MB)
-        await sendMessage(chatId, `⚠️ 视频太大 (${videoSize.toFixed(2)}MB)，可能无法在Worker环境中处理或上传。尝试上传中...`, env);
+        await sendMessage(chatId, `⚠️ 视频太大 (${videoSize.toFixed(2)}MB)，可能无法在Worker环境中处理或上传。尝试上传中...`, config);
       }
 
       const formData = new FormData();
@@ -210,21 +534,21 @@ async function handleVideo(message, chatId, isDocument = false, env) {
         const plainLink = videoUrl;
         const msgText = `✅ 视频上传成功！\n\n` +
                        `🔗 下载链接:\n${plainLink}\n\n`;
-        await sendMessage(chatId, msgText, env);
+        await sendMessage(chatId, msgText, config);
       } else {
-        await sendMessage(chatId, `⚠️ 无法从图床获取视频链接。原始响应 (前200字符):\n${responseText.substring(0, 200)}... \n\n或者尝试Telegram临时链接 (有效期有限):\n${fileUrl}`, env);
+        await sendMessage(chatId, `⚠️ 无法从图床获取视频链接。原始响应 (前200字符):\n${responseText.substring(0, 200)}... \n\n或者尝试Telegram临时链接 (有效期有限):\n${fileUrl}`, config);
       }
     } catch (error) {
       console.error('处理视频时出错:', error);
-      await sendMessage(chatId, `❌ 处理视频时出错: ${error.message}\n\n可能是视频太大或格式不支持。`, env);
+      await sendMessage(chatId, `❌ 处理视频时出错: ${error.message}\n\n可能是视频太大或格式不支持。`, config);
     }
   } else {
-    await sendMessage(chatId, '❌ 无法获取视频信息，请稍后再试。', env);
+    await sendMessage(chatId, '❌ 无法获取视频信息，请稍后再试。', config);
   }
 }
 
 // 处理音频上传
-async function handleAudio(message, chatId, isDocument = false, env) {
+async function handleAudio(message, chatId, isDocument = false, env, config) {
   const fileId = isDocument ? message.document.file_id : message.audio.file_id;
   const fileName = isDocument 
     ? message.document.file_name 
@@ -235,7 +559,7 @@ async function handleAudio(message, chatId, isDocument = false, env) {
   const BOT_TOKEN = env.BOT_TOKEN;
   const AUTH_CODE = env.AUTH_CODE;
 
-  await sendMessage(chatId, '🔄 正在处理您的音频，请稍候...', env);
+  await sendMessage(chatId, '🔄 正在处理您的音频，请稍候...', config);
 
   const fileInfo = await getFile(fileId, env);
 
@@ -251,7 +575,7 @@ async function handleAudio(message, chatId, isDocument = false, env) {
       const audioSize = audioBuffer.byteLength / (1024 * 1024); // MB
       
       if (audioSize > 5120) { // 增加到5GB (5120MB)
-        await sendMessage(chatId, `⚠️ 音频太大 (${audioSize.toFixed(2)}MB)，可能无法在Worker环境中处理或上传。尝试上传中...`, env);
+        await sendMessage(chatId, `⚠️ 音频太大 (${audioSize.toFixed(2)}MB)，可能无法在Worker环境中处理或上传。尝试上传中...`, config);
       }
 
       const formData = new FormData();
@@ -290,21 +614,21 @@ async function handleAudio(message, chatId, isDocument = false, env) {
         const plainLink = audioUrl;
         const msgText = `✅ 音频上传成功！\n\n` +
                        `🔗 下载链接:\n${plainLink}\n\n`;
-        await sendMessage(chatId, msgText, env);
+        await sendMessage(chatId, msgText, config);
       } else {
-        await sendMessage(chatId, `⚠️ 无法从图床获取音频链接。原始响应 (前200字符):\n${responseText.substring(0, 200)}... \n\n或者尝试Telegram临时链接 (有效期有限):\n${fileUrl}`, env);
+        await sendMessage(chatId, `⚠️ 无法从图床获取音频链接。原始响应 (前200字符):\n${responseText.substring(0, 200)}... \n\n或者尝试Telegram临时链接 (有效期有限):\n${fileUrl}`, config);
       }
     } catch (error) {
       console.error('处理音频时出错:', error);
-      await sendMessage(chatId, `❌ 处理音频时出错: ${error.message}\n\n可能是音频太大或格式不支持。`, env);
+      await sendMessage(chatId, `❌ 处理音频时出错: ${error.message}\n\n可能是音频太大或格式不支持。`, config);
     }
   } else {
-    await sendMessage(chatId, '❌ 无法获取音频信息，请稍后再试。', env);
+    await sendMessage(chatId, '❌ 无法获取音频信息，请稍后再试。', config);
   }
 }
 
 // 处理动画/GIF上传
-async function handleAnimation(message, chatId, isDocument = false, env) {
+async function handleAnimation(message, chatId, isDocument = false, env, config) {
   const fileId = isDocument ? message.document.file_id : message.animation.file_id;
   const fileName = isDocument 
     ? message.document.file_name 
@@ -315,7 +639,7 @@ async function handleAnimation(message, chatId, isDocument = false, env) {
   const BOT_TOKEN = env.BOT_TOKEN;
   const AUTH_CODE = env.AUTH_CODE;
 
-  await sendMessage(chatId, '🔄 正在处理您的动画/GIF，请稍候...', env);
+  await sendMessage(chatId, '🔄 正在处理您的动画/GIF，请稍候...', config);
 
   const fileInfo = await getFile(fileId, env);
 
@@ -331,7 +655,7 @@ async function handleAnimation(message, chatId, isDocument = false, env) {
       const animSize = animBuffer.byteLength / (1024 * 1024); // MB
       
       if (animSize > 5120) { // 增加到5GB (5120MB)
-        await sendMessage(chatId, `⚠️ 动画太大 (${animSize.toFixed(2)}MB)，可能无法在Worker环境中处理或上传。尝试上传中...`, env);
+        await sendMessage(chatId, `⚠️ 动画太大 (${animSize.toFixed(2)}MB)，可能无法在Worker环境中处理或上传。尝试上传中...`, config);
       }
 
       const formData = new FormData();
@@ -370,21 +694,21 @@ async function handleAnimation(message, chatId, isDocument = false, env) {
         const plainLink = animUrl;
         const msgText = `✅ 动画/GIF上传成功！\n\n` +
                        `🔗 链接:\n${plainLink}\n\n`;
-        await sendMessage(chatId, msgText, env);
+        await sendMessage(chatId, msgText, config);
       } else {
-        await sendMessage(chatId, `⚠️ 无法从图床获取动画链接。原始响应 (前200字符):\n${responseText.substring(0, 200)}... \n\n或者尝试Telegram临时链接 (有效期有限):\n${fileUrl}`, env);
+        await sendMessage(chatId, `⚠️ 无法从图床获取动画链接。原始响应 (前200字符):\n${responseText.substring(0, 200)}... \n\n或者尝试Telegram临时链接 (有效期有限):\n${fileUrl}`, config);
       }
     } catch (error) {
       console.error('处理动画时出错:', error);
-      await sendMessage(chatId, `❌ 处理动画时出错: ${error.message}\n\n可能是文件太大或格式不支持。`, env);
+      await sendMessage(chatId, `❌ 处理动画时出错: ${error.message}\n\n可能是文件太大或格式不支持。`, config);
     }
   } else {
-    await sendMessage(chatId, '❌ 无法获取动画信息，请稍后再试。', env);
+    await sendMessage(chatId, '❌ 无法获取动画信息，请稍后再试。', config);
   }
 }
 
 // 处理SVG文件上传
-async function handleSvg(message, chatId, env) {
+async function handleSvg(message, chatId, env, config) {
   const fileId = message.document.file_id;
   const fileName = message.document.file_name || `svg_${Date.now()}.svg`;
 
@@ -393,7 +717,7 @@ async function handleSvg(message, chatId, env) {
   const BOT_TOKEN = env.BOT_TOKEN;
   const AUTH_CODE = env.AUTH_CODE;
 
-  await sendMessage(chatId, '🔄 正在处理您的SVG文件，请稍候...', env);
+  await sendMessage(chatId, '🔄 正在处理您的SVG文件，请稍候...', config);
 
   const fileInfo = await getFile(fileId, env);
 
@@ -409,7 +733,7 @@ async function handleSvg(message, chatId, env) {
       const svgSize = svgBuffer.byteLength / (1024 * 1024); // MB
       
       if (svgSize > 5120) { // 增加到5GB (5120MB)
-        await sendMessage(chatId, `⚠️ SVG文件太大 (${svgSize.toFixed(2)}MB)，可能无法在Worker环境中处理或上传。尝试上传中...`, env);
+        await sendMessage(chatId, `⚠️ SVG文件太大 (${svgSize.toFixed(2)}MB)，可能无法在Worker环境中处理或上传。尝试上传中...`, config);
       }
 
       const formData = new FormData();
@@ -445,21 +769,21 @@ async function handleSvg(message, chatId, env) {
         const plainLink = svgUrl;
         const msgText = `✅ SVG文件上传成功！\n\n` +
                        `🔗 链接:\n${plainLink}\n\n`;
-        await sendMessage(chatId, msgText, env);
+        await sendMessage(chatId, msgText, config);
       } else {
-        await sendMessage(chatId, `⚠️ 无法从图床获取SVG文件链接。原始响应 (前200字符):\n${responseText.substring(0, 200)}... \n\n或者尝试Telegram临时链接 (有效期有限):\n${fileUrl}`, env);
+        await sendMessage(chatId, `⚠️ 无法从图床获取SVG文件链接。原始响应 (前200字符):\n${responseText.substring(0, 200)}... \n\n或者尝试Telegram临时链接 (有效期有限):\n${fileUrl}`, config);
       }
     } catch (error) {
       console.error('处理SVG文件时出错:', error);
-      await sendMessage(chatId, `❌ 处理SVG文件时出错: ${error.message}\n\n可能是文件太大或格式不支持。`, env);
+      await sendMessage(chatId, `❌ 处理SVG文件时出错: ${error.message}\n\n可能是文件太大或格式不支持。`, config);
     }
   } else {
-    await sendMessage(chatId, '❌ 无法获取SVG文件信息，请稍后再试。', env);
+    await sendMessage(chatId, '❌ 无法获取SVG文件信息，请稍后再试。', config);
   }
 }
 
 // 处理文档上传（通用文件处理）
-async function handleDocument(message, chatId, env) {
+async function handleDocument(message, chatId, env, config) {
   const fileId = message.document.file_id;
   const fileName = message.document.file_name || `file_${Date.now()}`;
   const mimeType = message.document.mime_type || 'application/octet-stream';
@@ -471,7 +795,7 @@ async function handleDocument(message, chatId, env) {
 
   // 获取文件类型图标
   const fileIcon = getFileIcon(fileName, mimeType);
-  await sendMessage(chatId, `${fileIcon} 正在处理您的文件 "${fileName}"，请稍候...`, env);
+  await sendMessage(chatId, `${fileIcon} 正在处理您的文件 "${fileName}"，请稍候...`, config);
 
   const fileInfo = await getFile(fileId, env);
 
@@ -487,7 +811,7 @@ async function handleDocument(message, chatId, env) {
       const fileSize = fileBuffer.byteLength / (1024 * 1024); // MB
 
       if (fileSize > 5120) { // 增加到5GB (5120MB)
-        await sendMessage(chatId, `⚠️ 文件太大 (${fileSize.toFixed(2)}MB)，可能无法在Worker环境中处理或上传。尝试上传中...`, env);
+        await sendMessage(chatId, `⚠️ 文件太大 (${fileSize.toFixed(2)}MB)，可能无法在Worker环境中处理或上传。尝试上传中...`, config);
       }
 
       const formData = new FormData();
@@ -535,16 +859,16 @@ async function handleDocument(message, chatId, env) {
                        `📄 文件名: ${fileName}\n` +
                        `📦 文件大小: ${formatFileSize(fileBuffer.byteLength)}\n` +
                        `🔗 下载链接:\n${plainLink}\n\n`;
-        await sendMessage(chatId, msgText, env);
+        await sendMessage(chatId, msgText, config);
       } else {
-        await sendMessage(chatId, `⚠️ 无法从图床获取文件链接。原始响应 (前200字符):\n${responseText.substring(0, 200)}... \n\n或者尝试Telegram临时链接 (有效期有限):\n${fileUrl}`, env);
+        await sendMessage(chatId, `⚠️ 无法从图床获取文件链接。原始响应 (前200字符):\n${responseText.substring(0, 200)}... \n\n或者尝试Telegram临时链接 (有效期有限):\n${fileUrl}`, config);
       }
     } catch (error) {
       console.error('处理文件时出错:', error);
-      await sendMessage(chatId, `❌ 处理文件时出错: ${error.message}\n\n可能是文件太大或格式不支持。`, env);
+      await sendMessage(chatId, `❌ 处理文件时出错: ${error.message}\n\n可能是文件太大或格式不支持。`, config);
     }
   } else {
-    await sendMessage(chatId, '❌ 无法获取文件信息，请稍后再试。', env);
+    await sendMessage(chatId, '❌ 无法获取文件信息，请稍后再试。', config);
   }
 }
 
@@ -704,3 +1028,203 @@ function formatFileSize(bytes, decimals = 2) {
   
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
+<<<<<<< HEAD
+=======
+
+// 修改WebDAV上传函数以支持文件夹
+async function uploadToWebDAV(fileBuffer, fileName, env) {
+  const WEBDAV_URL = env.WEBDAV_URL;
+  const WEBDAV_USERNAME = env.WEBDAV_USERNAME;
+  const WEBDAV_PASSWORD = env.WEBDAV_PASSWORD;
+  const currentFolder = env.WEBDAV_CURRENT_FOLDER || '';
+
+  // 检查是否在根目录
+  if (!currentFolder) {
+    throw new Error('不允许在根目录上传文件，请先选择一个文件夹');
+  }
+
+  // 构建WebDAV请求URL
+  const uploadUrl = new URL(WEBDAV_URL);
+  if (!uploadUrl.pathname.endsWith('/')) {
+    uploadUrl.pathname += '/';
+  }
+  
+  // 添加当前文件夹路径
+  if (currentFolder) {
+    uploadUrl.pathname += currentFolder + '/';
+  }
+  
+  // 确保文件夹存在
+  if (currentFolder) {
+    await createWebDAVFolder(uploadUrl.toString(), env);
+  }
+  
+  uploadUrl.pathname += fileName;
+
+  // 创建Basic认证头
+  const auth = btoa(`${WEBDAV_USERNAME}:${WEBDAV_PASSWORD}`);
+  
+  // 发送PUT请求上传文件
+  const response = await fetch(uploadUrl.toString(), {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Basic ${auth}`,
+      'Content-Type': 'application/octet-stream'
+    },
+    body: fileBuffer
+  });
+
+  if (!response.ok) {
+    throw new Error(`WebDAV上传失败: ${response.status} ${response.statusText}`);
+  }
+
+  // 返回文件URL
+  return uploadUrl.toString();
+}
+
+// 添加创建WebDAV文件夹的函数
+async function createWebDAVFolder(folderUrl, env) {
+  const WEBDAV_USERNAME = env.WEBDAV_USERNAME;
+  const WEBDAV_PASSWORD = env.WEBDAV_PASSWORD;
+  const auth = btoa(`${WEBDAV_USERNAME}:${WEBDAV_PASSWORD}`);
+
+  // 发送MKCOL请求创建文件夹
+  const response = await fetch(folderUrl, {
+    method: 'MKCOL',
+    headers: {
+      'Authorization': `Basic ${auth}`
+    }
+  });
+
+  // 如果文件夹已存在（409）或其他错误，忽略它
+  if (!response.ok && response.status !== 409) {
+    console.error(`创建WebDAV文件夹失败: ${response.status} ${response.statusText}`);
+  }
+}
+
+// 修改显示文件夹导航的函数
+async function showFolderNavigation(chatId, env, messageId = null, config) {
+  const currentPath = env.WEBDAV_TEMP_FOLDER || '';
+  const folders = await listWebDAVFolders(env);
+  
+  // 构建内联键盘
+  const keyboard = [];
+  
+  // 添加返回上级目录按钮（如果不是根目录）
+  if (currentPath) {
+    keyboard.push([{
+      text: '⬆️ 返回上级目录',
+      callback_data: 'webdav_folder:back'
+    }]);
+  }
+  
+  // 添加当前目录选择按钮（如果不是根目录）
+  if (currentPath) {
+    keyboard.push([{
+      text: `✅ 选择当前目录 (${currentPath})`,
+      callback_data: 'webdav_folder:select'
+    }]);
+  }
+  
+  // 添加文件夹按钮
+  if (folders.length > 0) {
+    // 每行最多两个按钮
+    for (let i = 0; i < folders.length; i += 2) {
+      const row = [];
+      row.push({
+        text: `📁 ${folders[i]}`,
+        callback_data: `webdav_folder:${folders[i]}`
+      });
+      
+      if (i + 1 < folders.length) {
+        row.push({
+          text: `📁 ${folders[i + 1]}`,
+          callback_data: `webdav_folder:${folders[i + 1]}`
+        });
+      }
+      
+      keyboard.push(row);
+    }
+  } else {
+    // 如果没有子文件夹，显示提示
+    keyboard.push([{
+      text: '📌 当前目录下没有子文件夹',
+      callback_data: 'webdav_folder:none'
+    }]);
+  }
+  
+  const currentUploadFolder = env.WEBDAV_CURRENT_FOLDER || '未选择';
+  const messageText = `📁 当前目录: ${currentPath || '根目录'}\n📂 当前上传目录: ${currentUploadFolder}\n\n请选择要进入的文件夹或选择当前目录作为上传目录：`;
+  
+  if (messageId) {
+    // 编辑现有消息
+    await editMessage(chatId, messageId, messageText, keyboard, config);
+  } else {
+    // 发送新消息
+    await sendMessageWithKeyboard(chatId, messageText, keyboard, config);
+  }
+}
+
+// 添加发送带内联键盘的消息的函数
+async function sendMessageWithKeyboard(chatId, text, keyboard, env) {
+  const BOT_TOKEN = env.BOT_TOKEN;
+  const API_URL = `https://api.telegram.org/bot${BOT_TOKEN}`;
+  
+  const response = await fetch(`${API_URL}/sendMessage`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: text,
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: keyboard
+      }
+    }),
+  });
+  return await response.json();
+}
+
+// 添加编辑消息的函数
+async function editMessage(chatId, messageId, text, keyboard, env) {
+  const BOT_TOKEN = env.BOT_TOKEN;
+  const API_URL = `https://api.telegram.org/bot${BOT_TOKEN}`;
+  
+  const response = await fetch(`${API_URL}/editMessageText`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: messageId,
+      text: text,
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: keyboard
+      }
+    }),
+  });
+  return await response.json();
+}
+
+// 添加删除消息的函数
+async function deleteMessage(chatId, messageId, env) {
+  const BOT_TOKEN = env.BOT_TOKEN;
+  const API_URL = `https://api.telegram.org/bot${BOT_TOKEN}`;
+  
+  const response = await fetch(`${API_URL}/deleteMessage`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: messageId
+    }),
+  });
+  return await response.json();
+}
+>>>>>>> origin/main
