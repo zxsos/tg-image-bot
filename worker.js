@@ -27,6 +27,43 @@ async function handleRequest(request, env) {
 
   try {
     const update = await request.json();
+    
+    // 处理内联键盘回调
+    if (update.callback_query) {
+      const callbackQuery = update.callback_query;
+      const chatId = callbackQuery.message.chat.id;
+      const messageId = callbackQuery.message.message_id;
+      const data = callbackQuery.data;
+
+      // 解析回调数据
+      const [action, ...params] = data.split(':');
+      
+      if (action === 'webdav_folder') {
+        const folderPath = params.join(':');
+        if (folderPath === 'select') {
+          // 选择当前文件夹作为上传目录
+          env.WEBDAV_CURRENT_FOLDER = env.WEBDAV_TEMP_FOLDER || '';
+          await sendMessage(chatId, `✅ WebDAV上传文件夹已设置为: ${env.WEBDAV_CURRENT_FOLDER || '根目录'}`, env);
+          // 删除导航消息
+          await deleteMessage(chatId, messageId, env);
+        } else if (folderPath === 'back') {
+          // 返回上一级目录
+          const currentPath = env.WEBDAV_TEMP_FOLDER || '';
+          const parentPath = currentPath.split('/').slice(0, -1).join('/');
+          env.WEBDAV_TEMP_FOLDER = parentPath;
+          await showFolderNavigation(chatId, env, messageId);
+        } else {
+          // 进入子目录
+          const currentPath = env.WEBDAV_TEMP_FOLDER || '';
+          const newPath = currentPath ? `${currentPath}/${folderPath}` : folderPath;
+          env.WEBDAV_TEMP_FOLDER = newPath;
+          await showFolderNavigation(chatId, env, messageId);
+        }
+      }
+      
+      return new Response('OK', { status: 200 });
+    }
+
     if (!update.message) return new Response('OK', { status: 200 });
 
     const message = update.message;
@@ -52,18 +89,15 @@ async function handleRequest(request, env) {
               // 切换上传目标到WebDAV
               env.USE_WEBDAV = !env.USE_WEBDAV;
               const status = env.USE_WEBDAV ? '已切换到WebDAV上传模式' : '已切换回图床上传模式';
-              const currentFolder = env.WEBDAV_CURRENT_FOLDER || '根目录';
               
-              // 获取根目录文件夹列表
-              let folderList = '';
               if (env.USE_WEBDAV) {
-                const folders = await listWebDAVFolders(env);
-                if (folders.length > 0) {
-                  folderList = '\n\n📁 可用文件夹：\n' + folders.map(f => `- ${f}`).join('\n');
-                }
+                // 重置临时文件夹路径
+                env.WEBDAV_TEMP_FOLDER = '';
+                // 显示文件夹导航
+                await showFolderNavigation(chatId, env);
+              } else {
+                await sendMessage(chatId, `✅ ${status}！`, env);
               }
-              
-              await sendMessage(chatId, `✅ ${status}！\n\n当前WebDAV上传文件夹: ${currentFolder}${folderList}\n\n使用 /webdav_folder 命令可以切换上传文件夹。`, env);
             } else {
               await sendMessage(chatId, `❌ WebDAV连接测试失败：${testResult.error}`, env);
             }
@@ -79,15 +113,10 @@ async function handleRequest(request, env) {
 
         const args = text.split(' ').slice(1);
         if (args.length === 0) {
-          // 显示当前文件夹和可用文件夹列表
-          const currentFolder = env.WEBDAV_CURRENT_FOLDER || '根目录';
-          const folders = await listWebDAVFolders(env);
-          let folderList = '';
-          if (folders.length > 0) {
-            folderList = '\n\n📁 可用文件夹：\n' + folders.map(f => `- ${f}`).join('\n');
-          }
-          
-          await sendMessage(chatId, `📁 当前WebDAV上传文件夹: ${currentFolder}${folderList}\n\n使用方法：\n/webdav_folder 文件夹路径\n\n例如：\n/webdav_folder images\n/webdav_folder photos/2024`, env);
+          // 重置临时文件夹路径
+          env.WEBDAV_TEMP_FOLDER = '';
+          // 显示文件夹导航
+          await showFolderNavigation(chatId, env);
         } else {
           // 设置新文件夹
           const newFolder = args[0].replace(/^\/+|\/+$/g, ''); // 移除开头和结尾的斜杠
@@ -209,8 +238,12 @@ async function listWebDAVFolders(env) {
         const path = match.replace(/<D:href>|<\/D:href>/g, '');
         // 移除URL前缀和结尾的斜杠
         const folder = path.replace(new URL(WEBDAV_URL).pathname, '').replace(/^\/|\/$/g, '');
-        if (folder && !folders.includes(folder)) {
-          folders.push(folder);
+        if (folder) {
+          // URL解码文件夹名称
+          const decodedFolder = decodeURIComponent(folder);
+          if (!folders.includes(decodedFolder)) {
+            folders.push(decodedFolder);
+          }
         }
       });
     }
@@ -944,4 +977,120 @@ async function createWebDAVFolder(folderUrl, env) {
   if (!response.ok && response.status !== 409) {
     console.error(`创建WebDAV文件夹失败: ${response.status} ${response.statusText}`);
   }
+}
+
+// 添加显示文件夹导航的函数
+async function showFolderNavigation(chatId, env, messageId = null) {
+  const currentPath = env.WEBDAV_TEMP_FOLDER || '';
+  const folders = await listWebDAVFolders(env);
+  
+  // 构建内联键盘
+  const keyboard = [];
+  const row = [];
+  
+  // 添加返回上级目录按钮（如果不是根目录）
+  if (currentPath) {
+    keyboard.push([{
+      text: '⬆️ 返回上级目录',
+      callback_data: 'webdav_folder:back'
+    }]);
+  }
+  
+  // 添加当前目录选择按钮
+  keyboard.push([{
+    text: `✅ 选择当前目录 (${currentPath || '根目录'})`,
+    callback_data: 'webdav_folder:select'
+  }]);
+  
+  // 添加文件夹按钮
+  folders.forEach(folder => {
+    row.push({
+      text: `📁 ${folder}`,
+      callback_data: `webdav_folder:${folder}`
+    });
+    
+    // 每行最多两个按钮
+    if (row.length === 2) {
+      keyboard.push([...row]);
+      row.length = 0;
+    }
+  });
+  
+  // 添加最后一行（如果有）
+  if (row.length > 0) {
+    keyboard.push([...row]);
+  }
+  
+  const messageText = `📁 当前目录: ${currentPath || '根目录'}\n\n请选择要进入的文件夹或选择当前目录作为上传目录：`;
+  
+  if (messageId) {
+    // 编辑现有消息
+    await editMessage(chatId, messageId, messageText, keyboard, env);
+  } else {
+    // 发送新消息
+    await sendMessageWithKeyboard(chatId, messageText, keyboard, env);
+  }
+}
+
+// 添加发送带内联键盘的消息的函数
+async function sendMessageWithKeyboard(chatId, text, keyboard, env) {
+  const BOT_TOKEN = env.BOT_TOKEN;
+  const API_URL = `https://api.telegram.org/bot${BOT_TOKEN}`;
+  
+  const response = await fetch(`${API_URL}/sendMessage`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: text,
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: keyboard
+      }
+    }),
+  });
+  return await response.json();
+}
+
+// 添加编辑消息的函数
+async function editMessage(chatId, messageId, text, keyboard, env) {
+  const BOT_TOKEN = env.BOT_TOKEN;
+  const API_URL = `https://api.telegram.org/bot${BOT_TOKEN}`;
+  
+  const response = await fetch(`${API_URL}/editMessageText`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: messageId,
+      text: text,
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: keyboard
+      }
+    }),
+  });
+  return await response.json();
+}
+
+// 添加删除消息的函数
+async function deleteMessage(chatId, messageId, env) {
+  const BOT_TOKEN = env.BOT_TOKEN;
+  const API_URL = `https://api.telegram.org/bot${BOT_TOKEN}`;
+  
+  const response = await fetch(`${API_URL}/deleteMessage`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: messageId
+    }),
+  });
+  return await response.json();
 }
