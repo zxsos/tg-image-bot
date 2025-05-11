@@ -272,8 +272,16 @@ async function listWebDAVFolders(env) {
       method: 'PROPFIND',
       headers: {
         'Authorization': `Basic ${auth}`,
-        'Depth': '1'
-      }
+        'Depth': '1',
+        'Content-Type': 'application/xml'
+      },
+      body: `<?xml version="1.0" encoding="utf-8" ?>
+        <propfind xmlns="DAV:">
+          <prop>
+            <resourcetype/>
+            <displayname/>
+          </prop>
+        </propfind>`
     });
 
     if (!response.ok) {
@@ -285,13 +293,25 @@ async function listWebDAVFolders(env) {
     
     const folders = [];
     
-    // 简单的XML解析，提取文件夹路径
-    const matches = text.match(/<D:href>([^<]+)<\/D:href>/g);
-    if (matches) {
-      matches.forEach(match => {
-        const path = match.replace(/<D:href>|<\/D:href>/g, '');
+    // 使用正则表达式匹配所有response节点
+    const responseRegex = /<D:response>([\s\S]*?)<\/D:response>/g;
+    let match;
+    
+    while ((match = responseRegex.exec(text)) !== null) {
+      const responseContent = match[1];
+      
+      // 提取href
+      const hrefMatch = responseContent.match(/<D:href>([^<]+)<\/D:href>/);
+      if (!hrefMatch) continue;
+      
+      const href = hrefMatch[1];
+      
+      // 检查是否是集合（文件夹）
+      const isCollection = responseContent.includes('<D:collection/>');
+      
+      if (isCollection) {
         // 移除URL前缀和结尾的斜杠
-        const fullPath = path.replace(new URL(WEBDAV_URL).pathname, '').replace(/^\/|\/$/g, '');
+        const fullPath = href.replace(new URL(WEBDAV_URL).pathname, '').replace(/^\/|\/$/g, '');
         
         // 只处理当前目录下的直接子文件夹
         if (fullPath.startsWith(currentPath)) {
@@ -301,7 +321,7 @@ async function listWebDAVFolders(env) {
             folders.push(decodeURIComponent(relativePath));
           }
         }
-      });
+      }
     }
 
     console.log('找到的文件夹:', folders);
