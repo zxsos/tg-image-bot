@@ -266,6 +266,8 @@ async function listWebDAVFolders(env) {
       url.pathname += '/';
     }
 
+    console.log('正在获取WebDAV文件夹列表，URL:', url.toString());
+
     const response = await fetch(url.toString(), {
       method: 'PROPFIND',
       headers: {
@@ -279,6 +281,8 @@ async function listWebDAVFolders(env) {
     }
 
     const text = await response.text();
+    console.log('WebDAV响应:', text);
+    
     const folders = [];
     
     // 简单的XML解析，提取文件夹路径
@@ -300,6 +304,7 @@ async function listWebDAVFolders(env) {
       });
     }
 
+    console.log('找到的文件夹:', folders);
     return folders;
   } catch (error) {
     console.error('获取WebDAV文件夹列表失败:', error);
@@ -1038,7 +1043,6 @@ async function showFolderNavigation(chatId, env, messageId = null, config) {
   
   // 构建内联键盘
   const keyboard = [];
-  const row = [];
   
   // 添加返回上级目录按钮（如果不是根目录）
   if (currentPath) {
@@ -1055,22 +1059,30 @@ async function showFolderNavigation(chatId, env, messageId = null, config) {
   }]);
   
   // 添加文件夹按钮
-  folders.forEach(folder => {
-    row.push({
-      text: `📁 ${folder}`,
-      callback_data: `webdav_folder:${folder}`
-    });
-    
+  if (folders.length > 0) {
     // 每行最多两个按钮
-    if (row.length === 2) {
-      keyboard.push([...row]);
-      row.length = 0;
+    for (let i = 0; i < folders.length; i += 2) {
+      const row = [];
+      row.push({
+        text: `📁 ${folders[i]}`,
+        callback_data: `webdav_folder:${folders[i]}`
+      });
+      
+      if (i + 1 < folders.length) {
+        row.push({
+          text: `📁 ${folders[i + 1]}`,
+          callback_data: `webdav_folder:${folders[i + 1]}`
+        });
+      }
+      
+      keyboard.push(row);
     }
-  });
-  
-  // 添加最后一行（如果有）
-  if (row.length > 0) {
-    keyboard.push([...row]);
+  } else {
+    // 如果没有子文件夹，显示提示
+    keyboard.push([{
+      text: '📌 当前目录下没有子文件夹',
+      callback_data: 'webdav_folder:none'
+    }]);
   }
   
   const currentUploadFolder = env.WEBDAV_CURRENT_FOLDER || '根目录';
