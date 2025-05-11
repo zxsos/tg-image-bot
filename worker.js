@@ -85,7 +85,7 @@ async function handleRequest(request, env) {
         } else if (folderPath === 'change') {
           // 重置临时文件夹路径并显示文件夹导航
           env.WEBDAV_TEMP_FOLDER = '';
-          await showFolderNavigation(chatId, env, config);
+          await showFolderNavigation(chatId, env, null, config);
         } else if (folderPath === 'back') {
           // 返回上一级目录
           const currentPath = env.WEBDAV_TEMP_FOLDER || '';
@@ -160,8 +160,35 @@ async function handleRequest(request, env) {
         } else {
           // 设置新文件夹
           const newFolder = args[0].replace(/^\/+|\/+$/g, ''); // 移除开头和结尾的斜杠
-          env.WEBDAV_CURRENT_FOLDER = newFolder;
-          await sendMessage(chatId, `✅ WebDAV上传文件夹已更改为: ${newFolder || '根目录'}`, config);
+          try {
+            // 验证文件夹是否存在
+            const testUrl = new URL(config.WEBDAV_URL);
+            if (newFolder) {
+              testUrl.pathname = testUrl.pathname.replace(/\/$/, '') + '/' + newFolder;
+            }
+            if (!testUrl.pathname.endsWith('/')) {
+              testUrl.pathname += '/';
+            }
+
+            const auth = btoa(`${config.WEBDAV_USERNAME}:${config.WEBDAV_PASSWORD}`);
+            const response = await fetch(testUrl.toString(), {
+              method: 'PROPFIND',
+              headers: {
+                'Authorization': `Basic ${auth}`,
+                'Depth': '0'
+              }
+            });
+
+            if (response.ok) {
+              env.WEBDAV_CURRENT_FOLDER = newFolder;
+              await sendMessage(chatId, `✅ WebDAV上传文件夹已更改为: ${newFolder || '根目录'}`, config);
+            } else {
+              await sendMessage(chatId, `❌ 指定的文件夹不存在或无法访问: ${newFolder}`, config);
+            }
+          } catch (error) {
+            console.error('验证WebDAV文件夹失败:', error);
+            await sendMessage(chatId, `❌ 验证文件夹失败: ${error.message}`, config);
+          }
         }
       }
       return new Response('OK', { status: 200 });
@@ -248,7 +275,7 @@ async function testWebDAVConnection(env) {
   }
 }
 
-// 添加WebDAV文件夹列表函数
+// 重构listWebDAVFolders函数
 async function listWebDAVFolders(env) {
   const WEBDAV_URL = env.WEBDAV_URL;
   const WEBDAV_USERNAME = env.WEBDAV_USERNAME;
@@ -272,8 +299,16 @@ async function listWebDAVFolders(env) {
       method: 'PROPFIND',
       headers: {
         'Authorization': `Basic ${auth}`,
-        'Depth': '1'
-      }
+        'Depth': '1',
+        'Content-Type': 'application/xml'
+      },
+      body: `<?xml version="1.0" encoding="utf-8" ?>
+        <propfind xmlns="DAV:">
+          <prop>
+            <resourcetype/>
+            <displayname/>
+          </prop>
+        </propfind>`
     });
 
     if (!response.ok) {
@@ -284,23 +319,35 @@ async function listWebDAVFolders(env) {
     console.log('WebDAV响应:', text);
     
     const folders = [];
+    const baseUrl = new URL(WEBDAV_URL).pathname;
     
-    // 使用正则表达式匹配所有href
-    const hrefRegex = /<D:href>([^<]+)<\/D:href>/g;
+    // 使用正则表达式匹配所有response节点
+    const responseRegex = /<D:response>([\s\S]*?)<\/D:response>/g;
     let match;
     
-    while ((match = hrefRegex.exec(text)) !== null) {
-      const href = match[1];
+    while ((match = responseRegex.exec(text)) !== null) {
+      const responseContent = match[1];
       
-      // 移除URL前缀和结尾的斜杠
-      const fullPath = href.replace(new URL(WEBDAV_URL).pathname, '').replace(/^\/|\/$/g, '');
+      // 提取href
+      const hrefMatch = responseContent.match(/<D:href>([^<]+)<\/D:href>/);
+      if (!hrefMatch) continue;
       
-      // 只处理当前目录下的直接子文件夹
-      if (fullPath.startsWith(currentPath)) {
-        const relativePath = fullPath.slice(currentPath.length).replace(/^\/|\/$/g, '');
-        // 只添加直接子文件夹（不包含更深层的路径）
-        if (relativePath && !relativePath.includes('/') && !folders.includes(relativePath)) {
-          folders.push(decodeURIComponent(relativePath));
+      const href = hrefMatch[1];
+      
+      // 检查是否是集合（文件夹）
+      const isCollection = responseContent.includes('<D:collection/>');
+      
+      if (isCollection) {
+        // 移除URL前缀和结尾的斜杠
+        const fullPath = href.replace(baseUrl, '').replace(/^\/|\/$/g, '');
+        
+        // 只处理当前目录下的直接子文件夹
+        if (fullPath.startsWith(currentPath)) {
+          const relativePath = fullPath.slice(currentPath.length).replace(/^\/|\/$/g, '');
+          // 只添加直接子文件夹（不包含更深层的路径）
+          if (relativePath && !relativePath.includes('/') && !folders.includes(relativePath)) {
+            folders.push(decodeURIComponent(relativePath));
+          }
         }
       }
     }
