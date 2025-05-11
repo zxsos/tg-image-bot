@@ -33,6 +33,8 @@ async function handleRequest(request, env) {
     const chatId = message.chat.id;
     const text = message.text?.trim();
 
+
+    
     // 处理命令
     if (text && text.startsWith('/')) {
       const command = text.split(' ')[0];
