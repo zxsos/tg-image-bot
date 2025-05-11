@@ -272,16 +272,8 @@ async function listWebDAVFolders(env) {
       method: 'PROPFIND',
       headers: {
         'Authorization': `Basic ${auth}`,
-        'Depth': '1',
-        'Content-Type': 'application/xml'
-      },
-      body: `<?xml version="1.0" encoding="utf-8" ?>
-        <propfind xmlns="DAV:">
-          <prop>
-            <resourcetype/>
-            <displayname/>
-          </prop>
-        </propfind>`
+        'Depth': '1'
+      }
     });
 
     if (!response.ok) {
@@ -293,33 +285,22 @@ async function listWebDAVFolders(env) {
     
     const folders = [];
     
-    // 使用正则表达式匹配所有response节点
-    const responseRegex = /<D:response>([\s\S]*?)<\/D:response>/g;
+    // 使用正则表达式匹配所有href
+    const hrefRegex = /<D:href>([^<]+)<\/D:href>/g;
     let match;
     
-    while ((match = responseRegex.exec(text)) !== null) {
-      const responseContent = match[1];
+    while ((match = hrefRegex.exec(text)) !== null) {
+      const href = match[1];
       
-      // 提取href
-      const hrefMatch = responseContent.match(/<D:href>([^<]+)<\/D:href>/);
-      if (!hrefMatch) continue;
+      // 移除URL前缀和结尾的斜杠
+      const fullPath = href.replace(new URL(WEBDAV_URL).pathname, '').replace(/^\/|\/$/g, '');
       
-      const href = hrefMatch[1];
-      
-      // 检查是否是集合（文件夹）
-      const isCollection = responseContent.includes('<D:collection/>');
-      
-      if (isCollection) {
-        // 移除URL前缀和结尾的斜杠
-        const fullPath = href.replace(new URL(WEBDAV_URL).pathname, '').replace(/^\/|\/$/g, '');
-        
-        // 只处理当前目录下的直接子文件夹
-        if (fullPath.startsWith(currentPath)) {
-          const relativePath = fullPath.slice(currentPath.length).replace(/^\/|\/$/g, '');
-          // 只添加直接子文件夹（不包含更深层的路径）
-          if (relativePath && !relativePath.includes('/') && !folders.includes(relativePath)) {
-            folders.push(decodeURIComponent(relativePath));
-          }
+      // 只处理当前目录下的直接子文件夹
+      if (fullPath.startsWith(currentPath)) {
+        const relativePath = fullPath.slice(currentPath.length).replace(/^\/|\/$/g, '');
+        // 只添加直接子文件夹（不包含更深层的路径）
+        if (relativePath && !relativePath.includes('/') && !folders.includes(relativePath)) {
+          folders.push(decodeURIComponent(relativePath));
         }
       }
     }
@@ -997,6 +978,11 @@ async function uploadToWebDAV(fileBuffer, fileName, env) {
   const WEBDAV_PASSWORD = env.WEBDAV_PASSWORD;
   const currentFolder = env.WEBDAV_CURRENT_FOLDER || '';
 
+  // 检查是否在根目录
+  if (!currentFolder) {
+    throw new Error('不允许在根目录上传文件，请先选择一个文件夹');
+  }
+
   // 构建WebDAV请求URL
   const uploadUrl = new URL(WEBDAV_URL);
   if (!uploadUrl.pathname.endsWith('/')) {
@@ -1056,7 +1042,7 @@ async function createWebDAVFolder(folderUrl, env) {
   }
 }
 
-// 添加显示文件夹导航的函数
+// 修改显示文件夹导航的函数
 async function showFolderNavigation(chatId, env, messageId = null, config) {
   const currentPath = env.WEBDAV_TEMP_FOLDER || '';
   const folders = await listWebDAVFolders(env);
@@ -1072,11 +1058,13 @@ async function showFolderNavigation(chatId, env, messageId = null, config) {
     }]);
   }
   
-  // 添加当前目录选择按钮
-  keyboard.push([{
-    text: `✅ 选择当前目录 (${currentPath || '根目录'})`,
-    callback_data: 'webdav_folder:select'
-  }]);
+  // 添加当前目录选择按钮（如果不是根目录）
+  if (currentPath) {
+    keyboard.push([{
+      text: `✅ 选择当前目录 (${currentPath})`,
+      callback_data: 'webdav_folder:select'
+    }]);
+  }
   
   // 添加文件夹按钮
   if (folders.length > 0) {
@@ -1105,7 +1093,7 @@ async function showFolderNavigation(chatId, env, messageId = null, config) {
     }]);
   }
   
-  const currentUploadFolder = env.WEBDAV_CURRENT_FOLDER || '根目录';
+  const currentUploadFolder = env.WEBDAV_CURRENT_FOLDER || '未选择';
   const messageText = `📁 当前目录: ${currentPath || '根目录'}\n📂 当前上传目录: ${currentUploadFolder}\n\n请选择要进入的文件夹或选择当前目录作为上传目录：`;
   
   if (messageId) {
