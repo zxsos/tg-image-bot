@@ -226,9 +226,19 @@ async function listWebDAVFolders(env) {
   const WEBDAV_USERNAME = env.WEBDAV_USERNAME;
   const WEBDAV_PASSWORD = env.WEBDAV_PASSWORD;
   const auth = btoa(`${WEBDAV_USERNAME}:${WEBDAV_PASSWORD}`);
+  const currentPath = env.WEBDAV_TEMP_FOLDER || '';
 
   try {
-    const response = await fetch(WEBDAV_URL, {
+    // 构建完整的WebDAV URL，包含当前路径
+    const url = new URL(WEBDAV_URL);
+    if (currentPath) {
+      url.pathname = url.pathname.replace(/\/$/, '') + '/' + currentPath;
+    }
+    if (!url.pathname.endsWith('/')) {
+      url.pathname += '/';
+    }
+
+    const response = await fetch(url.toString(), {
       method: 'PROPFIND',
       headers: {
         'Authorization': `Basic ${auth}`,
@@ -249,12 +259,14 @@ async function listWebDAVFolders(env) {
       matches.forEach(match => {
         const path = match.replace(/<D:href>|<\/D:href>/g, '');
         // 移除URL前缀和结尾的斜杠
-        const folder = path.replace(new URL(WEBDAV_URL).pathname, '').replace(/^\/|\/$/g, '');
-        if (folder) {
-          // URL解码文件夹名称
-          const decodedFolder = decodeURIComponent(folder);
-          if (!folders.includes(decodedFolder)) {
-            folders.push(decodedFolder);
+        const fullPath = path.replace(new URL(WEBDAV_URL).pathname, '').replace(/^\/|\/$/g, '');
+        
+        // 只处理当前目录下的直接子文件夹
+        if (fullPath.startsWith(currentPath)) {
+          const relativePath = fullPath.slice(currentPath.length).replace(/^\/|\/$/g, '');
+          // 只添加直接子文件夹（不包含更深层的路径）
+          if (relativePath && !relativePath.includes('/') && !folders.includes(relativePath)) {
+            folders.push(decodeURIComponent(relativePath));
           }
         }
       });
@@ -851,7 +863,7 @@ function getFileIcon(filename, mimeType) {
     if (mimeType.includes('powerpoint') || mimeType.includes('presentation')) return '📊';
     if (mimeType.includes('text/')) return '📝';
     if (mimeType.includes('zip') || mimeType.includes('compressed')) return '🗜️';
-    if (mimeType.includes('html')) return '🌐';
+    if (mimeType.includes('html')) return '��';
     if (mimeType.includes('application/x-msdownload') || mimeType.includes('application/octet-stream')) return '⚙️';
   }
   
