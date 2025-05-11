@@ -60,11 +60,6 @@
     * **设置`IMG_BED_URL`**:
         * *网页方法*: 登录 Cloudflare -> Workers & Pages -> 您的 Worker -> Settings -> Variables -> Add variable -> 输入 `IMG_BED_URL` -> 粘贴图床上传 URL -> Save。
 
-    * **设置WebDAV相关配置（可选）**:
-        * *网页方法*: 登录 Cloudflare -> Workers & Pages -> 您的 Worker -> Settings -> Variables -> Add variable
-            * 输入 `WEBDAV_URL` -> 粘贴WebDAV服务器URL（例如：`https://your-webdav-server.com/dav/`）-> Save
-            * 输入 `WEBDAV_USERNAME` -> 粘贴WebDAV用户名 -> **点击 "Encrypt"** -> Save
-            * 输入 `WEBDAV_PASSWORD` -> 粘贴WebDAV密码 -> **点击 "Encrypt"** -> Save
 
 6. **设置 Telegram Webhook**:
     * 需要告诉 Telegram 将机器人的更新发送到您刚刚部署的 Worker URL。
@@ -89,11 +84,10 @@
 3. 发送 `/help` 命令可以查看简单的使用说明。
 4. 直接发送一张**图片**或一个**视频文件**给机器人。
 5. 等待片刻，机器人会将上传后的公开链接回复给您。
-6. 如果配置了WebDAV，可以使用 `/webdav` 命令切换到WebDAV上传模式。
 
 ## 设置机器人命令菜单 (可选)
 
-为了让用户在 Telegram 中更方便地使用命令（例如通过点击输入框旁边的 `/` 按钮），您可以通过 BotFather 设置命令列表。这能提供命令提示，改善用户体验。
+为了让用户在 Telegram 中更方便地使用 `/start` 和 `/help` 命令（例如通过点击输入框旁边的 `/` 按钮），您可以通过 BotFather 设置命令列表。这能提供命令提示，改善用户体验。
 
 1. 在 Telegram 中再次与 [@BotFather](https://t.me/BotFather) 对话。
 2. 发送 `/setcommands` 命令。
@@ -103,7 +97,6 @@
     ``` cmd
     start - 启用机器人
     help - 查看帮助信息
-    webdav - 切换到WebDAV上传模式
     ```
 
 5. 设置成功后，用户在与您的机器人对话时，点击 `/` 按钮就能看到这些预设的命令选项了。

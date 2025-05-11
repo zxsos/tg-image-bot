@@ -8,10 +8,7 @@ export default {
 async function handleRequest(request, env) {
   const IMG_BED_URL = env.IMG_BED_URL;
   const BOT_TOKEN = env.BOT_TOKEN;
-  const AUTH_CODE = env.AUTH_CODE;
-  const WEBDAV_URL = env.WEBDAV_URL;
-  const WEBDAV_USERNAME = env.WEBDAV_USERNAME;
-  const WEBDAV_PASSWORD = env.WEBDAV_PASSWORD;
+  const AUTH_CODE = env.AUTH_CODE; // 可选的认证代码
 
   // 检查必要的环境变量是否存在
   if (!IMG_BED_URL || !BOT_TOKEN) {
@@ -39,15 +36,7 @@ async function handleRequest(request, env) {
       if (command === '/start') {
         await sendMessage(chatId, '🤖 机器人已启用！\n\n直接发送文件即可自动上传，支持图片、视频、音频、文档等多种格式。支持最大5GB的文件上传。', env);
       } else if (command === '/help') {
-        await sendMessage(chatId, '📖 使用说明：\n\n1. 发送 /start 启动机器人（仅首次需要）。\n2. 直接发送图片、视频、音频、文档或其他文件，机器人会自动处理上传。\n3. 支持最大5GB的文件上传（受Cloudflare Worker限制，超大文件可能会失败）。\n4. 使用 /webdav 命令切换上传目标到WebDAV服务器。\n5. 此机器人由 @szxin 开发，支持多种文件类型上传', env);
-      } else if (command === '/webdav') {
-        if (!WEBDAV_URL || !WEBDAV_USERNAME || !WEBDAV_PASSWORD) {
-          await sendMessage(chatId, '❌ WebDAV未配置，请联系管理员配置WebDAV信息。', env);
-        } else {
-          // 切换上传目标到WebDAV
-          env.USE_WEBDAV = true;
-          await sendMessage(chatId, '✅ 已切换到WebDAV上传模式！\n\n所有文件将上传到WebDAV服务器。', env);
-        }
+        await sendMessage(chatId, '📖 使用说明：\n\n1. 发送 /start 启动机器人（仅首次需要）。\n2. 直接发送图片、视频、音频、文档或其他文件，机器人会自动处理上传。\n3. 支持最大5GB的文件上传（受Cloudflare Worker限制，超大文件可能会失败）。\n4. 无需输入其他命令，无需切换模式。\n5. 此机器人由 @szxin 开发，支持多种文件类型上传', env);
       }
       return new Response('OK', { status: 200 });
     }
@@ -714,89 +703,4 @@ function formatFileSize(bytes, decimals = 2) {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-}
-
-// 添加WebDAV上传函数
-async function uploadToWebDAV(fileBuffer, fileName, env) {
-  const WEBDAV_URL = env.WEBDAV_URL;
-  const WEBDAV_USERNAME = env.WEBDAV_USERNAME;
-  const WEBDAV_PASSWORD = env.WEBDAV_PASSWORD;
-
-  // 构建WebDAV请求URL
-  const uploadUrl = new URL(WEBDAV_URL);
-  if (!uploadUrl.pathname.endsWith('/')) {
-    uploadUrl.pathname += '/';
-  }
-  uploadUrl.pathname += fileName;
-
-  // 创建Basic认证头
-  const auth = btoa(`${WEBDAV_USERNAME}:${WEBDAV_PASSWORD}`);
-  
-  // 发送PUT请求上传文件
-  const response = await fetch(uploadUrl.toString(), {
-    method: 'PUT',
-    headers: {
-      'Authorization': `Basic ${auth}`,
-      'Content-Type': 'application/octet-stream'
-    },
-    body: fileBuffer
-  });
-
-  if (!response.ok) {
-    throw new Error(`WebDAV上传失败: ${response.status} ${response.statusText}`);
-  }
-
-  // 返回文件URL
-  return uploadUrl.toString();
-}
-
-// 修改文件处理函数以支持WebDAV
-async function handleFileUpload(fileBuffer, fileName, mimeType, chatId, env) {
-  try {
-    let fileUrl;
-    
-    if (env.USE_WEBDAV) {
-      // 使用WebDAV上传
-      fileUrl = await uploadToWebDAV(fileBuffer, fileName, env);
-    } else {
-      // 使用原有的图床上传
-      const formData = new FormData();
-      formData.append('file', new File([fileBuffer], fileName, { type: mimeType }));
-
-      const uploadUrl = new URL(env.IMG_BED_URL);
-      uploadUrl.searchParams.append('returnFormat', 'full');
-
-      if (env.AUTH_CODE) {
-        uploadUrl.searchParams.append('authCode', env.AUTH_CODE);
-      }
-
-      const uploadResponse = await fetch(uploadUrl, {
-        method: 'POST',
-        body: formData
-      });
-
-      const responseText = await uploadResponse.text();
-      let uploadResult;
-      try {
-        uploadResult = JSON.parse(responseText);
-      } catch (e) {
-        uploadResult = responseText;
-      }
-
-      fileUrl = extractUrlFromResult(uploadResult, env.IMG_BED_URL);
-    }
-
-    if (fileUrl) {
-      const msgText = `✅ 文件上传成功！\n\n` +
-                     `📄 文件名: ${fileName}\n` +
-                     `📦 文件大小: ${formatFileSize(fileBuffer.byteLength)}\n` +
-                     `🔗 下载链接:\n${fileUrl}\n\n`;
-      await sendMessage(chatId, msgText, env);
-    } else {
-      throw new Error('无法获取文件链接');
-    }
-  } catch (error) {
-    console.error('处理文件时出错:', error);
-    await sendMessage(chatId, `❌ 处理文件时出错: ${error.message}\n\n可能是文件太大或格式不支持。`, env);
-  }
 }
