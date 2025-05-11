@@ -43,9 +43,21 @@ async function handleRequest(request, env) {
         if (folderPath === 'select') {
           // 选择当前文件夹作为上传目录
           env.WEBDAV_CURRENT_FOLDER = env.WEBDAV_TEMP_FOLDER || '';
-          await sendMessage(chatId, `✅ WebDAV上传文件夹已设置为: ${env.WEBDAV_CURRENT_FOLDER || '根目录'}`, env);
+          // 发送确认消息，包含更换目录按钮
+          await sendMessageWithKeyboard(chatId, 
+            `✅ WebDAV上传文件夹已设置为: ${env.WEBDAV_CURRENT_FOLDER || '根目录'}`,
+            [[{
+              text: '🔄 更换上传目录',
+              callback_data: 'webdav_folder:change'
+            }]],
+            env
+          );
           // 删除导航消息
           await deleteMessage(chatId, messageId, env);
+        } else if (folderPath === 'change') {
+          // 重置临时文件夹路径并显示文件夹导航
+          env.WEBDAV_TEMP_FOLDER = '';
+          await showFolderNavigation(chatId, env);
         } else if (folderPath === 'back') {
           // 返回上一级目录
           const currentPath = env.WEBDAV_TEMP_FOLDER || '';
@@ -1021,7 +1033,8 @@ async function showFolderNavigation(chatId, env, messageId = null) {
     keyboard.push([...row]);
   }
   
-  const messageText = `📁 当前目录: ${currentPath || '根目录'}\n\n请选择要进入的文件夹或选择当前目录作为上传目录：`;
+  const currentUploadFolder = env.WEBDAV_CURRENT_FOLDER || '根目录';
+  const messageText = `📁 当前目录: ${currentPath || '根目录'}\n📂 当前上传目录: ${currentUploadFolder}\n\n请选择要进入的文件夹或选择当前目录作为上传目录：`;
   
   if (messageId) {
     // 编辑现有消息
