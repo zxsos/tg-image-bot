@@ -59,6 +59,12 @@ If you find it useful, please give it a Star!
     *   **Set `IMG_BED_URL`**:
         *   *Dashboard Method*: Log in to Cloudflare -> Workers & Pages -> Your Worker -> Settings -> Variables -> Add variable -> Enter `IMG_BED_URL` for "Variable name" -> Paste your image host upload URL for "Value" -> Save.
 
+    *   **Set WebDAV Configuration (Optional)**:
+        *   *Dashboard Method*: Log in to Cloudflare -> Workers & Pages -> Your Worker -> Settings -> Variables -> Add variable
+            * Enter `WEBDAV_URL` -> Paste WebDAV server URL (e.g., `https://your-webdav-server.com/dav/`) -> Save
+            * Enter `WEBDAV_USERNAME` -> Paste WebDAV username -> **Click "Encrypt"** -> Save
+            * Enter `WEBDAV_PASSWORD` -> Paste WebDAV password -> **Click "Encrypt"** -> Save
+
 6.  **Set Telegram Webhook**:
     *   You need to tell Telegram to send bot updates to your newly deployed Worker URL.
     *   Open your browser, or use a tool like `curl`, and visit the following URL (**be sure to replace `<YOUR_BOT_TOKEN>` and `<YOUR_WORKER_URL>`**):
@@ -82,19 +88,21 @@ If you find it useful, please give it a Star!
 3.  Send the `/help` command to see simple usage instructions.
 4.  Directly send an **image** or a **video file** to the bot.
 5.  Wait a moment, and the bot will reply with the public link of the uploaded file.
+6.  If WebDAV is configured, you can use the `/webdav` command to switch to WebDAV upload mode.
 
 ## Set Bot Command Menu (Optional)
 
-To make it easier for users to use `/start` and `/help` commands in Telegram (e.g., by clicking the `/` button next to the input field), you can set up a command list via BotFather. This provides command suggestions and improves user experience.
+To make it easier for users to use commands in Telegram (for example, by clicking the `/` button next to the input box), you can set up a command list via BotFather. This provides command hints and improves the user experience.
 
-1.  Chat with [@BotFather](https://t.me/BotFather) again in Telegram.
+1.  Chat with [@BotFather](https://t.me/BotFather) in Telegram again.
 2.  Send the `/setcommands` command.
-3.  Follow the prompts and select the bot you just deployed and configured.
-4.  **Send the following text directly** (ensure there's a space and a hyphen between the command and its description, and each command is on a new line; you can modify this):
+3.  Follow the prompts to select your newly deployed bot.
+4.  **Send the following text directly** (make sure there is a space and hyphen between the command and description, and each command is on a new line, you can modify as needed):
 
     ``` cmd
-    start - Activate the bot
+    start - Start the bot
     help - View help information
+    webdav - Switch to WebDAV upload mode
     ```
 
-5.  After successful setup, when users chat with your bot, they will see these preset command options when they click the `/` button.
+5.  After successful setup, users will see these preset command options when clicking the `/` button while chatting with your bot.
