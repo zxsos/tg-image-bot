@@ -1,0 +1,6 @@
+name = "tgimgbot"
+main = "worker.js"
+compatibility_date = "2025-04-16"
+
+[observability.logs]
+enabled = true
