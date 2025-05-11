@@ -82,13 +82,6 @@ If you find it useful, please give it a Star!
 3.  Send the `/help` command to see simple usage instructions.
 4.  Directly send an **image** or a **video file** to the bot.
 5.  Wait a moment, and the bot will reply with the public link of the uploaded file.
-<<<<<<< HEAD
-=======
-6.  If WebDAV is configured, you can use the following commands:
-    - `/webdav` - Toggle upload mode (switch between WebDAV and image hosting)
-    - `/webdav_folder` - View or set WebDAV upload folder
-    - `/webdav_folder folder_path` - Set new upload folder (e.g., `/webdav_folder images/2024`)
->>>>>>> origin/main
 
 ## Set Bot Command Menu (Optional)
 
@@ -102,11 +95,6 @@ To make it easier for users to use `/start` and `/help` commands in Telegram (e.
     ``` cmd
     start - Activate the bot
     help - View help information
-<<<<<<< HEAD
-=======
-    webdav - Toggle WebDAV upload mode
-    webdav_folder - Set WebDAV upload folder
->>>>>>> origin/main
     ```
 
 5.  After successful setup, when users chat with your bot, they will see these preset command options when they click the `/` button.
