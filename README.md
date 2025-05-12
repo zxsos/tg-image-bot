@@ -1,4 +1,4 @@
-# Tg-bot 文件上传助手
+# Telegram 文件上传助手
 [🌐 English README](README_en.md)
 
 觉得好用就点个 ⭐ Star 吧！
@@ -6,7 +6,7 @@
 ## ✨ 主要功能
 
 *   **自动上传**：直接向机器人发送文件即可上传。
-*   **多格式支持**：支持图片、视频、音频、SVG及各类文档。
+*   **多格式支持**：支持图片、视频、音频及各类文档。
 *   **配置集中**：通过 Cloudflare Worker 的单个 `CONFIG` 环境变量（JSON格式）进行所有配置。
 *   **部署简便**：基于 Cloudflare Workers，快速部署。
 
