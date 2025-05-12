@@ -1,102 +1,83 @@
-# Tg-bot
-[🌐 English README](README_en.md)  
-如果觉得有用帮忙点个Star吧
+# Tg-bot 文件上传助手
+[🌐 English README](README_en.md)
 
-## ✨ 功能特性
+觉得好用就点个 ⭐ Star 吧！
 
-* **自动上传**: 直接向机器人发送图片或视频即可触发上传。
-* **支持图片和视频**: 可以处理常见的图片格式和视频格式（作为视频文件或文档发送）。
-* **配置灵活**: 通过 Cloudflare 环境变量和 Secrets 配置图床地址、Bot Token 和可选的认证信息，无需修改代码。
-* **部署简单**: 基于 Cloudflare Workers，部署流程相对简单。
-* **低成本**: 利用 Cloudflare 的免费套餐额度。
-* **安全**: 敏感信息（如 Bot Token、认证代码）通过 Secrets 管理，更加安全。
+## ✨ 主要功能
 
-## 🚀 工作原理
+*   **自动上传**：直接向机器人发送文件即可上传。
+*   **多格式支持**：支持图片、视频、音频、SVG及各类文档。
+*   **配置集中**：通过 Cloudflare Worker 的单个 `CONFIG` 环境变量（JSON格式）进行所有配置。
+*   **部署简便**：基于 Cloudflare Workers，快速部署。
 
-1. 用户在 Telegram 中向此机器人发送图片或视频。
-2. Telegram 将包含文件信息的更新（Update）通过 Webhook 发送到 Cloudflare Worker 的 URL。
-3. Cloudflare Worker 脚本被触发，解析收到的更新。
-4. Worker 使用 Telegram Bot API 下载用户发送的文件。
-5. Worker 将下载的文件上传到在环境变量 `IMG_BED_URL` 中配置的图床地址，（如果配置了 `AUTH_CODE`）会携带相应的认证参数。
-6. Worker 解析图床返回的响应，提取公开的文件链接。
-7. Worker 使用 Telegram Bot API 将获取到的文件链接发送回给用户。
+## 🔧 开始之前
 
-## 🔧 环境要求
+*   **Telegram Bot Token**: 通过 [@BotFather](https://t.me/BotFather) 创建机器人获得。
+*   **图床上传接口**:
+    *   `IMG_BED_URL`: 您的图床文件上传API地址。
+    *   `AUTH_CODE` (可选): 如果图床接口需要认证，此为认证凭据。
+*   **Cloudflare 账户**: 用于部署 Worker。
 
-* **一个 Telegram Bot**: 需要通过 [BotFather](https://t.me/BotFather) 创建，并获取其 **Bot Token**。
-* **一个图床/对象存储服务**:
-  * 需要提供一个公开的 **文件上传接口 URL** (`IMG_BED_URL`)。
-  * 如果该接口需要认证，需要获取相应的 **认证代码** (`AUTH_CODE`)。常见的简单图床可能通过 URL 参数或 Header 进行认证，本项目代码目前实现了通过 URL 参数 (`authCode`) 传递认证信息。
-* **一个 Cloudflare 账户**: 免费账户即可开始。
+## 🛠️ 部署与配置指南
 
-## 🛠️ 部署与配置步骤
+1.  **获取 Bot Token**:
+    *   与 [@BotFather](https://t.me/BotFather) 对话，发送 `/newbot`。
+    *   按提示操作，记录下 **HTTP API token**。
 
-1. **创建 Telegram Bot**:
-    * 在 Telegram 中与 [@BotFather](https://t.me/BotFather) 对话。
-    * 发送 `/newbot` 命令，按照提示设置机器人的名称和用户名。
-    * **记下 BotFather 返回的 `HTTP API token`**，这就是您的 `BOT_TOKEN`。
+2.  **准备图床信息**:
+    *   `IMG_BED_URL`: 您的图床上传接口URL (例如: `https://your.domain/upload`)。
+    *   `AUTH_CODE` (可选): 图床接口的认证代码。
 
-2. **准备图床信息**:
-    * 确定您的图床或对象存储服务的**上传接口 URL** (例如 `https://your.domain/upload`)。这将是 `IMG_BED_URL` 的值。
-    * 如果上传需要认证码，**获取该认证码**。这将是 `AUTH_CODE` 的值。如果不需要认证，则此项为空。
+3.  **Fork 本项目**:
+    *   在 GitHub 上 Fork 此仓库。
 
-3. **Fork本项目**:
-    * Fork本仓库。
+4.  **部署到 Cloudflare Worker**:
+    *   登录 Cloudflare -> Workers & Pages -> 创建应用程序 -> 从 Git 提供商连接 -> 选择您 Fork 的仓库。
+    *   在“构建和部署”设置中，如果需要构建命令，通常对于纯 Worker 脚本可以留空或根据项目具体情况填写。对于本项目，如果根目录就是 `worker.js`，通常无需特定构建命令，部署命令可使用 `npx wrangler deploy` (如果通过 Wrangler CLI) 或通过 Cloudflare 仪表盘直接部署。
+    *   部署成功后，记录下 Worker 的 **访问 URL** (例如: `https://your-worker.your-subdomain.workers.dev`)。
 
-4. **部署 CloudFlare Worker**:
-    * *方法*： 登录 Cloudflare -> Workers & Pages -> 创建 -> 导入存储库选择刚刚fork的仓库 -> 填入部署命令```npx wrangler deploy``` -> 保存并部署
+5.  **配置 `CONFIG` 环境变量 (关键步骤)**:
+    *   在 Cloudflare Worker 仪表盘中：您的 Worker -> Settings -> Variables -> Add variable。
+    *   **变量名**: `CONFIG`
+    *   **值 (JSON格式)**:
+        ```json
+        {
+          "BOT_TOKEN": "这里粘贴您的BotToken",
+          "IMG_BED_URL": "这里粘贴您的图床上传URL",
+          "AUTH_CODE": "如果图床需要认证码则粘贴，否则留空字符串或移除此行",
+          "ADMIN_CHAT_ID": "可选，用于接收错误的管理员Telegram Chat ID"
+        }
+        ```
+    *   务必 **勾选 "Encrypt"** 保护敏感信息，然后保存。
 
-    * 部署成功后，Wrangler 会输出您的 Worker 的访问 URL，例如 `https://your-worker-name.your-subdomain.workers.dev`。**记下这个 URL**。
-
-5. **配置环境变量 (关键步骤)**:
-    您可以通过 Cloudflare Worker仪表板设置。**推荐使用密钥存储敏感信息**。
-
-    * **设置`BOT_TOKEN`**:
-        * *网页方法*: 登录 Cloudflare -> Workers & Pages -> 您的 Worker -> Settings -> Variables -> Add variable -> 输入 `BOT_TOKEN` -> 粘贴 Token -> **点击 "Encrypt"** -> Save。
-
-    * **设置`AUTH_CODE`(选填)**:
-        * *网页方法*: 类似 BOT_TOKEN，添加名为 `AUTH_CODE` 的变量，粘贴认证码，**点击 "Encrypt"** -> Save。
-
-    * **设置`IMG_BED_URL`**:
-        * *网页方法*: 登录 Cloudflare -> Workers & Pages -> 您的 Worker -> Settings -> Variables -> Add variable -> 输入 `IMG_BED_URL` -> 粘贴图床上传 URL -> Save。
-
-
-6. **设置 Telegram Webhook**:
-    * 需要告诉 Telegram 将机器人的更新发送到您刚刚部署的 Worker URL。
-    * 打开浏览器，或者使用 `curl` 工具，访问以下链接（**请务必替换 `<YOUR_BOT_TOKEN>` 和 `<YOUR_WORKER_URL>`**）：
-
-        ``` url
+6.  **设置 Telegram Webhook**:
+    *   替换以下链接中的 `<YOUR_BOT_TOKEN>` 和 `<YOUR_WORKER_URL>`：
+        ```text
         https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=<YOUR_WORKER_URL>
         ```
-
         例如:
-
-        ``` url
-        https://api.telegram.org/bot123456:ABC-DEF1234/setWebhook?url=https://my-tg-uploader.myusername.workers.dev
+        ```text
+        https://api.telegram.org/bot123456:ABC-DEF1234/setWebhook?url=https://my-tg-uploader.zxsos.workers.dev
         ```
-
-    * 如果浏览器显示 `{"ok":true,"result":true,"description":"Webhook was set"}` 或类似信息，则表示设置成功。
+    *   在浏览器中访问此链接。看到 `{"ok":true,"result":true,"description":"Webhook was set"}` 即表示成功。
 
 ## 💬 如何使用
 
-1. 在 Telegram 中搜索您创建的机器人的用户名，并开始对话。
-2. 发送 `/start` 命令给机器人（通常只需要第一次）。
-3. 发送 `/help` 命令可以查看简单的使用说明。
-4. 直接发送一张**图片**或一个**视频文件**给机器人。
-5. 等待片刻，机器人会将上传后的公开链接回复给您。
+1.  在 Telegram 中找到您的机器人并开始对话。
+2.  发送 `/start` (通常仅首次需要)。
+3.  发送 `/help` 查看帮助。
+4.  直接发送图片、视频、音频、SVG 或其他文档给机器人。
+5.  机器人会自动上传并回复文件链接。
 
-## 设置机器人命令菜单 (可选)
+## 🤖 设置机器人命令 (可选)
 
-为了让用户在 Telegram 中更方便地使用 `/start` 和 `/help` 命令（例如通过点击输入框旁边的 `/` 按钮），您可以通过 BotFather 设置命令列表。这能提供命令提示，改善用户体验。
+通过 [@BotFather](https://t.me/BotFather) 提升用户体验：
 
-1. 在 Telegram 中再次与 [@BotFather](https://t.me/BotFather) 对话。
-2. 发送 `/setcommands` 命令。
-3. 按照提示，选择您刚刚部署配置好的机器人。
-4. **直接发送以下文本**（确保命令和描述之间有空格和连字符，并且每个命令占一行，可以进行修改）：
-
-    ``` cmd
-    start - 启用机器人
-    help - 查看帮助信息
+1.  发送 `/setcommands` 给 BotFather。
+2.  选择您的机器人。
+3.  发送以下文本 (可自行修改描述)：
+    ```text
+    start - 🚀 启动机器人
+    help - ❓ 获取帮助
     ```
-
-5. 设置成功后，用户在与您的机器人对话时，点击 `/` 按钮就能看到这些预设的命令选项了。
+4.  完成后，用户在输入框点击 `/` 即可看到预设命令。
