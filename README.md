@@ -33,7 +33,7 @@
 
 4.  **部署到 Cloudflare Worker**:
     *   登录 Cloudflare -> Workers & Pages -> 创建应用程序 -> 从 Git 提供商连接 -> 选择您 Fork 的仓库。
-    *   在“构建和部署”设置中，如果需要构建命令，通常对于纯 Worker 脚本可以留空或根据项目具体情况填写。对于本项目，如果根目录就是 `worker.js`，通常无需特定构建命令，部署命令可使用 `npx wrangler deploy` (如果通过 Wrangler CLI) 或通过 Cloudflare 仪表盘直接部署。
+    *   在"构建和部署"设置中，如果需要构建命令，通常对于纯 Worker 脚本可以留空或根据项目具体情况填写。对于本项目，如果根目录就是 `worker.js`，通常无需特定构建命令，部署命令可使用 `npx wrangler deploy` (如果通过 Wrangler CLI) 或通过 Cloudflare 仪表盘直接部署。
     *   部署成功后，记录下 Worker 的 **访问 URL** (例如: `https://your-worker.your-subdomain.workers.dev`)。
 
 5.  **配置 `CONFIG` 环境变量 (关键步骤)**:
@@ -42,10 +42,11 @@
     *   **值 (JSON格式)**:
         ```json
         {
-          "BOT_TOKEN": "这里粘贴您的BotToken",
+          "TG_BOT_TOKEN": "这里粘贴您的BotToken",
           "IMG_BED_URL": "这里粘贴您的图床上传URL",
           "AUTH_CODE": "如果图床需要认证码则粘贴，否则留空字符串或移除此行",
-          "ADMIN_CHAT_ID": "可选，用于接收错误的管理员Telegram Chat ID"
+          "ADMIN_CHAT_ID": "可选，用于接收错误的管理员Telegram Chat ID",
+          "MAX_FILE_SIZE": "可选，最大文件大小（字节数），默认20MB"
         }
         ```
     *   务必 **勾选 "Encrypt"** 保护敏感信息，然后保存。

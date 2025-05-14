@@ -44,10 +44,11 @@ If you find this useful, please give it a ⭐ Star!
     *   **Value (JSON format)**:
         ```json
         {
-          "BOT_TOKEN": "paste_your_bot_token_here",
+          "TG_BOT_TOKEN": "paste_your_bot_token_here",
           "IMG_BED_URL": "paste_your_image_host_upload_url_here",
           "AUTH_CODE": "paste_auth_code_if_needed_or_empty_string_or_remove_this_line",
-          "ADMIN_CHAT_ID": "optional_admin_telegram_chat_id_for_error_notifications"
+          "ADMIN_CHAT_ID": "optional_admin_telegram_chat_id_for_error_notifications",
+          "MAX_FILE_SIZE": "optional_max_file_size_in_bytes_default_20MB"
         }
         ```
     *   Make sure to **check "Encrypt"** to protect sensitive information, then save.
