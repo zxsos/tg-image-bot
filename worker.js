@@ -1,5 +1,5 @@
 // 全局常量
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024 * 1024; // 5GB
+const DEFAULT_MAX_FILE_SIZE = 20 * 1024 * 1024; // 默认20MB
 const CONFIG_ENV_VAR_NAME = 'CONFIG'; // 更新：存储JSON配置的环境变量名
 
 export default {
@@ -23,8 +23,8 @@ export default {
     }
 
     // 3. 校验必要的配置项
-    if (!config.IMG_BED_URL || !config.BOT_TOKEN) {
-      const errorMessage = `配置中缺少必要的参数 (IMG_BED_URL, BOT_TOKEN)。请检查 ${CONFIG_ENV_VAR_NAME} 环境变量中的JSON内容。`;
+    if (!config.IMG_BED_URL || !config.TG_BOT_TOKEN) {
+      const errorMessage = `配置中缺少必要的参数 (IMG_BED_URL, TG_BOT_TOKEN)。请检查 ${CONFIG_ENV_VAR_NAME} 环境变量中的JSON内容。`;
       console.error(errorMessage);
       return new Response(errorMessage, { status: 500 });
     }
@@ -52,10 +52,11 @@ async function handleRequest(request, config, env) {
     // 处理命令
     if (text && text.startsWith('/')) {
       const command = text.split(' ')[0];
+      const maxSize = formatFileSize(config.MAX_FILE_SIZE || DEFAULT_MAX_FILE_SIZE);
       if (command === '/start') {
-        await sendMessage(chatId, '🤖 机器人已启用！\n\n直接发送文件即可自动上传，支持图片、视频、音频、文档等多种格式。支持最大5GB的文件上传。', config);
+        await sendMessage(chatId, `🤖 机器人已启用！\n\n直接发送文件即可自动上传，支持图片、视频、音频、文档等多种格式。当前支持最大${maxSize}的文件上传。`, config);
       } else if (command === '/help') {
-        await sendMessage(chatId, '📖 使用说明：\n\n1. 发送 /start 启动机器人（仅首次需要）。\n2. 直接发送图片、视频、音频、文档或其他文件，机器人会自动处理上传。\n3. 支持最大5GB的文件上传。\n', config);
+        await sendMessage(chatId, `📖 使用说明：\n\n1. 发送 /start 启动机器人（仅首次需要）。\n2. 直接发送图片、视频、音频、文档或其他文件，机器人会自动处理上传。\n3. 当前支持最大${maxSize}的文件上传。\n4. 无需输入其他命令，无需切换模式。\n5. 此机器人由 @zxsos 开发，支持多种文件类型上传。`, config);
       }
       return new Response('OK', { status: 200 });
     }
@@ -89,7 +90,7 @@ async function handleRequest(request, config, env) {
 
 // --- 通用文件上传处理器 ---
 async function genericFileUploadHandler(chatId, fileId, fileName, mimeType, fileTypeLabel, config) {
-  const { IMG_BED_URL, BOT_TOKEN, AUTH_CODE } = config;
+  const { IMG_BED_URL, TG_BOT_TOKEN, AUTH_CODE } = config;
 
   await sendMessage(chatId, `🔄 正在处理您的${fileTypeLabel} "${fileName}"，请稍候...`, config);
 
@@ -100,7 +101,7 @@ async function genericFileUploadHandler(chatId, fileId, fileName, mimeType, file
   }
 
   const filePath = fileInfoResponse.result.file_path;
-  const telegramFileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${filePath}`;
+  const telegramFileUrl = `https://api.telegram.org/file/bot${TG_BOT_TOKEN}/${filePath}`;
 
   try {
     const tgFileResponse = await fetch(telegramFileUrl);
@@ -110,13 +111,17 @@ async function genericFileUploadHandler(chatId, fileId, fileName, mimeType, file
 
     const fileBuffer = await tgFileResponse.arrayBuffer();
     const fileSize = fileBuffer.byteLength;
+    const maxSize = config.MAX_FILE_SIZE || DEFAULT_MAX_FILE_SIZE;
 
-    if (fileSize > MAX_FILE_SIZE_BYTES) {
-      await sendMessage(chatId, `⚠️ ${fileTypeLabel}太大 (${formatFileSize(fileSize)})，超过 ${formatFileSize(MAX_FILE_SIZE_BYTES)} 的限制，无法处理。`, config);
+    if (fileSize > maxSize) {
+      await sendMessage(chatId, `⚠️ ${fileTypeLabel}太大 (${formatFileSize(fileSize)})，超过当前限制 ${formatFileSize(maxSize)}，无法处理。\n\n如果文件较大，建议：\n1. 压缩文件后再上传\n2. 分片上传\n3. 使用其他文件分享服务`, config);
       return;
     }
-    if (fileSize > 25 * 1024 * 1024 && fileSize <= MAX_FILE_SIZE_BYTES) {
-        await sendMessage(chatId, `ℹ️ 文件大小为 ${formatFileSize(fileSize)}，处理和上传可能需要一些时间，请耐心等待。`, config);
+
+    // 根据文件大小动态调整提示阈值
+    const warningThreshold = Math.min(maxSize * 0.5, 10 * 1024 * 1024); // 取最大值的一半或10MB中的较小值
+    if (fileSize > warningThreshold && fileSize <= maxSize) {
+      await sendMessage(chatId, `ℹ️ 文件大小为 ${formatFileSize(fileSize)}，处理和上传可能需要一些时间，请耐心等待。`, config);
     }
 
     const formData = new FormData();
@@ -135,6 +140,10 @@ async function genericFileUploadHandler(chatId, fileId, fileName, mimeType, file
       body: formData
     });
 
+    if (!uploadResponse.ok) {
+      throw new Error(`图床上传失败: ${uploadResponse.status} ${uploadResponse.statusText}`);
+    }
+
     const responseText = await uploadResponse.text();
     console.log(`${fileTypeLabel}上传原始响应:`, responseText);
 
@@ -149,17 +158,26 @@ async function genericFileUploadHandler(chatId, fileId, fileName, mimeType, file
 
     if (extractedUrl) {
       const successMsg = `✅ ${fileTypeLabel}上传成功！\n\n` +
-                         `📄 文件名: ${fileName}\n` +
-                         `📦 文件大小: ${formatFileSize(fileSize)}\n` +
-                         `🔗 下载链接:\n${extractedUrl}\n\n`;
+                        `📄 文件名: ${fileName}\n` +
+                        `📦 文件大小: ${formatFileSize(fileSize)}\n` +
+                        `🔗 下载链接:\n${extractedUrl}\n\n`;
       await sendMessage(chatId, successMsg, config);
     } else {
-      await sendMessage(chatId, `⚠️ 无法从图床获取${fileTypeLabel}链接。图床原始响应:\n${responseText.substring(0, 200)}...\n\n如果需要，可尝试Telegram临时链接 (有效期内有限):\n${telegramFileUrl}`, config);
+      await sendMessage(chatId, `⚠️ 无法从图床获取${fileTypeLabel}链接。图床原始响应 (前200字符):\n${responseText.substring(0, 200)}...\n\n如果需要，可尝试Telegram临时链接 (有效期有限):\n${telegramFileUrl}`, config);
     }
 
   } catch (error) {
     console.error(`处理${fileTypeLabel}时出错:`, error.stack || error);
-    await sendMessage(chatId, `❌ 处理${fileTypeLabel}时出错: ${error.message}\n\n可能是文件太大、格式不支持或图床服务暂时不可用。`, config);
+    let errorMessage = `❌ 处理${fileTypeLabel}时出错: ${error.message}`;
+    
+    // 根据错误类型提供更具体的建议
+    if (error.message.includes('413') || error.message.includes('too large')) {
+      errorMessage += '\n\n文件可能超过图床限制，建议：\n1. 压缩文件后再上传\n2. 分片上传\n3. 使用其他文件分享服务';
+    } else if (error.message.includes('timeout') || error.message.includes('timed out')) {
+      errorMessage += '\n\n上传超时，建议：\n1. 检查网络连接\n2. 稍后重试\n3. 如果文件较大，考虑压缩后上传';
+    }
+    
+    await sendMessage(chatId, errorMessage, config);
   }
 }
 
@@ -215,15 +233,15 @@ async function handleDocument(message, chatId, config) {
 
 // --- 辅助函数 ---
 async function getFile(fileId, config) {
-  const { BOT_TOKEN } = config;
-  const API_URL = `https://api.telegram.org/bot${BOT_TOKEN}`;
+  const { TG_BOT_TOKEN } = config;
+  const API_URL = `https://api.telegram.org/bot${TG_BOT_TOKEN}`;
   const response = await fetch(`${API_URL}/getFile?file_id=${fileId}`);
   return await response.json();
 }
 
 async function sendMessage(chatId, text, config) {
-  const { BOT_TOKEN } = config;
-  const API_URL = `https://api.telegram.org/bot${BOT_TOKEN}`;
+  const { TG_BOT_TOKEN } = config;
+  const API_URL = `https://api.telegram.org/bot${TG_BOT_TOKEN}`;
   const response = await fetch(`${API_URL}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
