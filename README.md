@@ -39,7 +39,7 @@
 5.  **配置 `CONFIG` 环境变量 (关键步骤)**:
     *   在 Cloudflare Worker 仪表盘中：您的 Worker -> Settings -> Variables -> Add variable。
     *   **变量名**: `CONFIG`
-    *   **值 (JSON格式)**:
+    *   **值（文本）**:
         ```json
         {
           "TG_BOT_TOKEN": "这里粘贴您的BotToken",
@@ -49,6 +49,7 @@
           "MAX_FILE_SIZE": "可选，最大文件大小（字节数），默认20MB"
         }
         ```
+        ![CONFIG](https://zxsos.pages.dev/file/pic/1747259895003_20250515055759745.webp)
     *   务必 **勾选 "Encrypt"** 保护敏感信息，然后保存。
 
 6.  **设置 Telegram Webhook**:

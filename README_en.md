@@ -41,7 +41,7 @@ If you find this useful, please give it a ⭐ Star!
 5.  **Configure the `CONFIG` Environment Variable (Crucial Step)**:
     *   In your Cloudflare Worker dashboard: Your Worker -> Settings -> Variables -> Add variable.
     *   **Variable name**: `CONFIG`
-    *   **Value (JSON format)**:
+    *   **Value (TXT)**:
         ```json
         {
           "TG_BOT_TOKEN": "paste_your_bot_token_here",
@@ -51,6 +51,7 @@ If you find this useful, please give it a ⭐ Star!
           "MAX_FILE_SIZE": "optional_max_file_size_in_bytes_default_20MB"
         }
         ```
+        ![CONFIG](https://zxsos.pages.dev/file/pic/1747259895003_20250515055759745.webp)
     *   Make sure to **check "Encrypt"** to protect sensitive information, then save.
 
 6.  **Set Telegram Webhook**:
